@@ -238,7 +238,7 @@ export default function App() {
   };
 
   const addNotification = (msg) => {
-    const id = Date.now();
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
     setNotifications(prev => [...prev, { id, msg, exiting: false }]);
     setTimeout(() => {
       dismissNotification(id);
