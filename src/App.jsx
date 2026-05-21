@@ -1,29 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { db, geminiModel } from './firebase';
 import { collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, writeBatch } from 'firebase/firestore';
-import { 
-  Check, 
-  Plus, 
-  Trash2, 
-  Mic, 
-  MicOff, 
-  Compass, 
-  Calendar, 
-  History, 
-  Sparkles, 
-  Undo2, 
-  Clock, 
-  ShoppingCart, 
-  ChevronRight, 
-  AlertCircle,
-  HelpCircle,
-  TrendingUp,
-  Settings,
-  List,
-  ArrowUpDown,
-  Play,
-  X
-} from 'lucide-react';
+import SandboxHeader from './components/SandboxHeader';
+import NotificationCenter from './components/NotificationCenter';
+import Navbar from './components/Navbar';
+import WelcomeBanner from './components/WelcomeBanner';
+import ActiveListTab from './components/ActiveListTab';
+import VoiceSandboxTab from './components/VoiceSandboxTab';
+import AnalyticsTab from './components/AnalyticsTab';
+import Footer from './components/Footer';
 
 // Helper to snap intervals to standard periods [0, 3, 7, 14, 30]
 const snapInterval = (days) => {
@@ -44,14 +29,6 @@ const INITIAL_ITEMS = [
   { id: '6', name: 'Paper Towels', checked: true, category: 'Household', location: 'Supermarché', frequencyCount: 5, intervalDays: 30, lastAdded: Date.now() - (15 * 24 * 60 * 60 * 1000), autoAdded: false }
 ];
 
-const ITEM_SUGGESTIONS = [
-  { name: 'Eggs (Large Grade A)', category: 'Dairy & Eggs', location: 'Primeur', frequencyCount: 22 },
-  { name: 'Spinach (Baby Leaves)', category: 'Produce', location: 'Primeur', frequencyCount: 15 },
-  { name: 'Chicken Breasts', category: 'Meat & Seafood', location: 'Boucherie', frequencyCount: 11 },
-  { name: 'Apples (Honeycrisp)', category: 'Produce', location: 'Primeur', frequencyCount: 10 },
-  { name: 'Toilet Paper 12-Pack', category: 'Household', location: 'Supermarché', frequencyCount: 4 },
-  { name: 'Pasta Sauce (Marinara)', category: 'Pantry', location: 'Épicerie', frequencyCount: 7 }
-];
 
 // Helper to map dynamic terms to standard grocery categories
 const CATEGORY_MAP = {
@@ -152,6 +129,17 @@ export default function App() {
 
   // Voice recognition setup
   const recognitionRef = useRef(null);
+  const voiceLangRef = useRef(voiceLang);
+  const processVoiceCommandRef = useRef(processVoiceCommand);
+
+  // Keep refs synchronized
+  useEffect(() => {
+    voiceLangRef.current = voiceLang;
+  }, [voiceLang]);
+
+  useEffect(() => {
+    processVoiceCommandRef.current = processVoiceCommand;
+  });
 
   useEffect(() => {
     // Initialize Web Speech API if supported
@@ -160,7 +148,7 @@ export default function App() {
       const rec = new SpeechRecognition();
       rec.continuous = false;
       rec.interimResults = false;
-      rec.lang = voiceLang;
+      rec.lang = voiceLangRef.current;
 
       rec.onstart = () => {
         setIsVoiceActive(true);
@@ -170,13 +158,13 @@ export default function App() {
       rec.onresult = (event) => {
         const transcript = event.results[0][0].transcript;
         setVoiceResultText(transcript);
-        processVoiceCommand(transcript);
+        processVoiceCommandRef.current(transcript);
       };
 
       rec.onerror = (event) => {
         console.error("Speech Recognition Error:", event);
         const errType = event.error || "security-block";
-        let friendlyMsg = `Voice input unavailable (Code: ${errType}).`;
+        let friendlyMsg;
         
         if (errType === 'not-allowed') {
           friendlyMsg = "Microphone permission denied. Open http://localhost:5174/ in a browser tab to allow access.";
@@ -200,7 +188,9 @@ export default function App() {
 
       recognitionRef.current = rec;
     } else {
-      setVoiceStatus('Web Speech API not natively supported on this browser context. Try opening http://localhost:5174/ in a standard browser tab.');
+      setTimeout(() => {
+        setVoiceStatus('Web Speech API not natively supported on this browser context. Try opening http://localhost:5174/ in a standard browser tab.');
+      }, 0);
     }
   }, []);
 
@@ -217,8 +207,8 @@ export default function App() {
   // Local regex-based command parser as fallback
   const processVoiceCommandFallback = (text) => {
     const lower = text.toLowerCase().trim();
-    let itemName = '';
-    let intervalDays = 0;
+    let itemName;
+    let intervalDays;
 
     const everyDaysMatch = lower.match(/(?:add|put|buy)\s+(.*?)\s+every\s+(\d+)\s+days?/i);
     const weeklyMatch = lower.match(/(?:add|put|buy)\s+(.*?)\s+(?:weekly|every week)/i);
@@ -386,7 +376,7 @@ User Voice Command: "${text}" (The command is transcribed using speech recogniti
     if (isVoiceActive) {
       try {
         recognitionRef.current?.stop();
-      } catch (e) {
+      } catch {
         setIsVoiceActive(false);
       }
     } else {
@@ -556,807 +546,74 @@ User Voice Command: "${text}" (The command is transcribed using speech recogniti
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
-      
-      {/* Simulation Banner Header */}
-      <header className="bg-amber-500 text-white px-4 py-2 flex flex-wrap justify-between items-center text-xs font-semibold shadow-sm gap-2">
-        <div className="flex items-center gap-2">
-          <span className="bg-white text-amber-600 px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider shadow-sm">Developer Sandbox</span>
-          <span>Simulated Time Shift: <strong className="underline text-sm font-extrabold">{timeShiftDays} Days Passed</strong></span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <button 
-            onClick={() => handleTimeTravel(3)} 
-            className="bg-amber-600 hover:bg-amber-700 active:translate-y-0.5 text-white px-2.5 py-1 rounded transition flex items-center gap-1 shadow-sm"
-          >
-            <Play className="w-3 h-3 fill-white" /> +3 Days
-          </button>
-          <button 
-            onClick={() => handleTimeTravel(7)} 
-            className="bg-amber-700 hover:bg-amber-800 active:translate-y-0.5 text-white px-2.5 py-1 rounded transition flex items-center gap-1 shadow-sm font-bold"
-          >
-            <Play className="w-3 h-3 fill-white" /> +7 Days (Test Recurrence!)
-          </button>
-          <button 
-            onClick={() => setTimeShiftDays(0)} 
-            className="bg-slate-700 hover:bg-slate-800 text-white px-2 py-1 rounded transition flex items-center gap-1 text-[10px]"
-            title="Reset simulation timeline"
-          >
-            <Undo2 className="w-3 h-3" /> Reset
-          </button>
-        </div>
-      </header>
+      <SandboxHeader 
+        timeShiftDays={timeShiftDays} 
+        handleTimeTravel={handleTimeTravel} 
+        setTimeShiftDays={setTimeShiftDays} 
+      />
 
-      {/* Floating Notifications */}
-      <div className="fixed top-12 right-4 z-50 flex flex-col gap-2 max-w-sm">
-        {notifications.map(n => (
-          <div 
-            key={n.id} 
-            className={`bg-slate-900 text-white px-4 py-3 rounded-lg shadow-xl flex items-center justify-between gap-3 text-xs border border-slate-700 cursor-default ${
-              n.exiting ? 'notification-exit' : 'notification-enter'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>{n.msg}</span>
-            </div>
-            <button
-              onClick={() => dismissNotification(n.id)}
-              className="text-slate-400 hover:text-white hover:bg-slate-800 p-1 rounded-md transition-all cursor-pointer shrink-0"
-              aria-label="Dismiss notification"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        ))}
-      </div>
+      <NotificationCenter 
+        notifications={notifications} 
+        dismissNotification={dismissNotification} 
+      />
 
-      {/* Main Navbar */}
-      <nav className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-30 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="bg-amber-500 text-white p-2.5 rounded-xl shadow-md shadow-amber-500/20 flex items-center justify-center">
-            <ShoppingCart className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-1.5">
-              SmartList AI <span className="text-[11px] bg-amber-100 text-amber-700 font-extrabold px-1.5 py-0.5 rounded-md uppercase tracking-wide">Keep Edition</span>
-            </h1>
-            <p className="text-xs text-slate-500 font-medium">Collaborative Family Groceries &middot; Powered by Gemini</p>
-          </div>
-        </div>
+      <Navbar 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+      />
 
-        {/* Tab Controls */}
-        <div className="flex bg-slate-100 p-1 rounded-xl">
-          <button 
-            onClick={() => setActiveTab('list')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2 ${activeTab === 'list' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
-          >
-            <List className="w-4 h-4" />
-            <span className="hidden sm:inline">Active List</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab('voice')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2 ${activeTab === 'voice' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
-          >
-            <Mic className="w-4 h-4 text-amber-500" />
-            <span className="hidden sm:inline">Voice / Gemini Sandbox</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab('analytics')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2 ${activeTab === 'analytics' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
-          >
-            <History className="w-4 h-4 text-indigo-500" />
-            <span className="hidden sm:inline">History & Frequency</span>
-          </button>
-        </div>
-      </nav>
-
-      {/* Main Container */}
       <main className="flex-1 max-w-5xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 gap-6">
+        <WelcomeBanner 
+          showWelcome={showWelcome} 
+          handleDismissWelcome={handleDismissWelcome} 
+        />
 
-        {/* Top Feature highlights context card */}
-        {showWelcome && (
-          <div className="bg-gradient-to-r from-amber-500 to-amber-600 text-white p-5 rounded-2xl shadow-lg relative overflow-hidden">
-            <button 
-              onClick={handleDismissWelcome}
-              className="absolute top-4 right-4 text-white/80 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition-all z-20 cursor-pointer"
-              aria-label="Dismiss welcome message"
-            >
-              <X className="w-4 h-4" />
-            </button>
-            <div className="absolute right-0 top-0 translate-x-12 -translate-y-8 opacity-10 pointer-events-none">
-              <ShoppingCart className="w-64 h-64" />
-            </div>
-            <div className="relative z-10 max-w-2xl">
-              <h2 className="text-lg md:text-xl font-bold mb-1.5 flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-amber-200 animate-pulse" /> Welcome to your SmartList AI Prototype!
-              </h2>
-              <p className="text-sm text-amber-50 opacity-90 leading-relaxed mb-4">
-                We are simulating a production Google Keep experience tailored with Google Gemini AI features. Test our <strong>"Hey Google / Gemini" voice shortcuts</strong> below, trigger the <strong>AI Location Sorter</strong>, or simulate the passage of days to trigger the <strong>Predictive Recurrence Engine</strong>!
-              </p>
-              <div className="flex flex-wrap gap-2 text-xs">
-                <span className="bg-amber-400/30 px-3 py-1.5 rounded-lg border border-white/20 font-medium">✅ Real-Time Sync Simulated</span>
-                <span className="bg-amber-400/30 px-3 py-1.5 rounded-lg border border-white/20 font-medium">🤖 Simulated Gemini API</span>
-                <span className="bg-amber-400/30 px-3 py-1.5 rounded-lg border border-white/20 font-medium">🕒 Temporal Engine Active</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* View Switcher Container */}
         {activeTab === 'list' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            {/* Input & Google Keep-style Fast Controls */}
-            <div className="lg:col-span-1 space-y-6">
-              
-              {/* Quick Add Form card */}
-              <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4 flex items-center gap-2">
-                  <Plus className="w-4 h-4 text-amber-500" /> Quick Add Item
-                </h3>
-                
-                <form onSubmit={handleAddSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">Item Name</label>
-                    <input 
-                      type="text"
-                      value={newItemName}
-                      onChange={(e) => setNewItemName(e.target.value)}
-                      placeholder="e.g. Almond Milk, Organic Eggs..."
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white text-sm transition"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5 flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-indigo-500" /> Temporal Recurrence
-                    </label>
-                    <select
-                      value={newItemRecurrence}
-                      onChange={(e) => setNewItemRecurrence(parseInt(e.target.value))}
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white text-sm transition"
-                    >
-                      <option value={0}>One-time item (No recurrence)</option>
-                      <option value={3}>Every 3 Days (High Frequency)</option>
-                      <option value={7}>Every 7 Days (Weekly staple)</option>
-                      <option value={14}>Every 14 Days (Bi-weekly)</option>
-                      <option value={30}>Every 30 Days (Monthly staples)</option>
-                    </select>
-                    <p className="text-[11px] text-slate-400 mt-1">If specified, this item will automatically reappear on your grocery list after N days elapse.</p>
-                  </div>
-
-                  <button 
-                    type="submit"
-                    className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 rounded-xl shadow-lg hover:shadow-slate-900/15 transition flex items-center justify-center gap-2 text-sm"
-                  >
-                    <Plus className="w-4 h-4" /> Add to Shopping List
-                  </button>
-                </form>
-              </div>
-
-              {/* Gemini Quick Commands Help Card */}
-              <div className="bg-indigo-50 rounded-2xl border border-indigo-100 p-5 shadow-sm">
-                <h4 className="text-sm font-bold text-indigo-950 flex items-center gap-2 mb-2">
-                  <Sparkles className="w-4 h-4 text-indigo-500" /> Gemini Voice Shortcut Info
-                </h4>
-                <p className="text-xs text-indigo-900 leading-relaxed mb-3">
-                  Say or write natural expressions. Gemini will parse item names and automatic schedule rules instantly:
-                </p>
-                <div className="space-y-2">
-                  <div className="bg-white/80 p-2 rounded-lg border border-indigo-100 text-xs text-slate-700 font-mono">
-                    "Add cheese slices every 5 days"
-                  </div>
-                  <div className="bg-white/80 p-2 rounded-lg border border-indigo-100 text-xs text-slate-700 font-mono">
-                    "Put whole wheat bread on weekly"
-                  </div>
-                </div>
-                <button 
-                  onClick={() => setActiveTab('voice')}
-                  className="mt-4 text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 group"
-                >
-                  Go to Gemini Command Center <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition" />
-                </button>
-              </div>
-
-            </div>
-
-            {/* Shopping List view */}
-            <div className="lg:col-span-2 space-y-4">
-              
-              {/* Toolbar & Sort Controls */}
-              <div className="bg-white px-5 py-4 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-4 shadow-sm">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-slate-800">Sorting Mode:</span>
-                  <div className="flex rounded-lg overflow-hidden border border-slate-200 text-xs">
-                    <button 
-                      onClick={() => setSortMethod('none')}
-                      className={`px-3 py-1.5 font-semibold ${sortMethod === 'none' ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
-                    >
-                      As Added
-                    </button>
-                    <button 
-                      onClick={() => setSortMethod('alphabetical')}
-                      className={`px-3 py-1.5 font-semibold ${sortMethod === 'alphabetical' ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
-                    >
-                      A-Z
-                    </button>
-                    <button 
-                      onClick={() => setSortMethod('location')}
-                      className={`px-3 py-1.5 font-semibold flex items-center gap-1 ${sortMethod === 'location' ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
-                    >
-                      Location Sorted
-                    </button>
-                  </div>
-                </div>
-
-                {/* Gemini AI Sort Trigger button */}
-                <button
-                  onClick={triggerAILocationSort}
-                  disabled={isSortingAI}
-                  className="bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 disabled:opacity-50 text-white text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-md shadow-indigo-600/10 transition"
-                >
-                  <Sparkles className={`w-3.5 h-3.5 text-indigo-200 ${isSortingAI ? 'animate-spin' : ''}`} />
-                  {isSortingAI ? 'Sorting Layout...' : 'AI Location Sort'}
-                </button>
-              </div>
-
-              {/* Loader for Gemini AI calculation */}
-              {isSortingAI && (
-                <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-6 text-center shadow-inner flex flex-col items-center justify-center animate-pulse gap-3">
-                  <div className="relative">
-                    <Compass className="w-10 h-10 text-indigo-500 animate-spin" />
-                    <Sparkles className="w-4 h-4 text-amber-500 absolute -top-1 -right-1" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-indigo-950">AI Layout Mapping Engine Processing</h4>
-                    <p className="text-xs text-indigo-700 mt-1 font-mono">{geminiStatus}</p>
-                  </div>
-                </div>
-              )}
-
-              {/* ACTIVE GROCERY CARDS (Keep-Style) */}
-              <div className="space-y-3">
-                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Active Items ({sortedLists.active.length})</h3>
-                
-                {sortedLists.active.length === 0 ? (
-                  <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center text-slate-400 text-sm">
-                    No active items. All groceries checked! Use voice or manual entry to add more.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {sortedLists.active.map(item => {
-                      const isEditing = editingItem?.id === item.id;
-                      
-                      if (isEditing) {
-                        return (
-                          <form 
-                            key={item.id} 
-                            onSubmit={saveEditedItem} 
-                            onClick={(e) => e.stopPropagation()}
-                            className="bg-white rounded-2xl border-2 border-indigo-500 p-4 shadow-md space-y-3 animate-fade-in text-left col-span-1"
-                          >
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Item Name</label>
-                              <input 
-                                type="text"
-                                value={editingItem.name}
-                                onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
-                                className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 font-medium"
-                                required
-                                autoFocus
-                              />
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Category</label>
-                                <select
-                                  value={editingItem.category}
-                                  onChange={(e) => setEditingItem({ ...editingItem, category: e.target.value })}
-                                  className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none text-slate-700 font-semibold"
-                                >
-                                  <option value="Produce">Produce</option>
-                                  <option value="Dairy & Eggs">Dairy & Eggs</option>
-                                  <option value="Bakery">Bakery</option>
-                                  <option value="Meat & Seafood">Meat & Seafood</option>
-                                  <option value="Pantry">Pantry</option>
-                                  <option value="Household">Household</option>
-                                  <option value="Other">Other</option>
-                                </select>
-                              </div>
-                              <div>
-                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Location</label>
-                                <input 
-                                  type="text"
-                                  value={editingItem.location || ''}
-                                  onChange={(e) => setEditingItem({ ...editingItem, location: e.target.value })}
-                                  className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none text-slate-700"
-                                />
-                              </div>
-                            </div>
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
-                                <Clock className="w-3 h-3 text-indigo-500" /> Recurrence Period
-                              </label>
-                              <select
-                                value={editingItem.intervalDays}
-                                onChange={(e) => setEditingItem({ ...editingItem, intervalDays: parseInt(e.target.value) })}
-                                className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none text-slate-700"
-                              >
-                                <option value={0}>No recurrence</option>
-                                <option value={3}>Every 3 Days</option>
-                                <option value={7}>Every 7 Days</option>
-                                <option value={14}>Every 14 Days</option>
-                                <option value={30}>Every 30 Days</option>
-                              </select>
-                            </div>
-                            <div className="flex justify-end gap-1.5 pt-2 border-t border-slate-100">
-                              <button
-                                type="button"
-                                onClick={() => setEditingItem(null)}
-                                className="px-2.5 py-1 text-slate-500 hover:text-slate-800 font-bold text-[11px] transition"
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                type="submit"
-                                className="bg-slate-900 hover:bg-slate-800 text-white font-bold px-3 py-1 rounded-lg text-[11px] transition shadow-sm"
-                              >
-                                Save
-                              </button>
-                            </div>
-                          </form>
-                        );
-                      }
-
-                      return (
-                        <div 
-                          key={item.id} 
-                          onClick={() => setEditingItem(item)}
-                          className={`bg-white rounded-2xl border cursor-pointer ${item.autoAdded ? 'border-amber-400 bg-amber-50/20' : 'border-slate-200'} p-4 shadow-sm flex items-start gap-3 transition-all hover:scale-[1.01] hover:shadow-md relative group`}
-                        >
-                          {/* Auto-added pill */}
-                          {item.autoAdded && (
-                            <span className="absolute top-2 right-2 bg-amber-100 text-amber-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded-md flex items-center gap-1 border border-amber-200">
-                              <Clock className="w-2.5 h-2.5" /> Auto-Replenished
-                            </span>
-                          )}
-
-                          {/* Recurrence Indicator Dot */}
-                          {item.intervalDays > 0 && !item.autoAdded && (
-                            <span className="absolute top-2 right-2 bg-indigo-50 text-indigo-700 text-[9px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
-                              <Clock className="w-2.5 h-2.5" /> {item.intervalDays}d
-                            </span>
-                          )}
-
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleItem(item.id);
-                            }}
-                            className="mt-1 w-6 h-6 rounded-lg border-2 border-slate-300 hover:border-amber-500 hover:bg-amber-50 flex items-center justify-center bg-slate-50 transition shrink-0 group/checkbox"
-                            title="Check off item"
-                          >
-                            <Check className="w-4 h-4 text-amber-500 opacity-0 group-hover/checkbox:opacity-100 transition-opacity" />
-                          </button>
-                          
-                          <div className="flex-1 min-w-0 pr-6">
-                            <p className="font-semibold text-slate-900 text-sm break-words">{item.name}</p>
-                            <div className="flex flex-wrap gap-1.5 mt-1">
-                              <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                                {item.category}
-                              </span>
-                              <span className="bg-indigo-50 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5">
-                                📍 {item.location}
-                              </span>
-                            </div>
-                          </div>
-
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteItem(item.id);
-                            }}
-                            className="opacity-0 group-hover:opacity-100 hover:text-red-500 text-slate-400 transition p-1 rounded-lg hover:bg-slate-100 shrink-0"
-                            title="Delete from list"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* COMPLETED/CHECKED ITEMS SECTION */}
-              {sortedLists.checked.length > 0 && (
-                <div className="space-y-3 pt-4 border-t border-slate-200">
-                  <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">Checked Off ({sortedLists.checked.length})</h3>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {sortedLists.checked.map(item => {
-                      const isEditing = editingItem?.id === item.id;
-
-                      if (isEditing) {
-                        return (
-                          <form 
-                            key={item.id} 
-                            onSubmit={saveEditedItem} 
-                            onClick={(e) => e.stopPropagation()}
-                            className="bg-white rounded-2xl border-2 border-indigo-500 p-4 shadow-md space-y-3 animate-fade-in text-left col-span-1"
-                          >
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Item Name</label>
-                              <input 
-                                type="text"
-                                value={editingItem.name}
-                                onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
-                                className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 font-medium"
-                                required
-                                autoFocus
-                              />
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Category</label>
-                                <select
-                                  value={editingItem.category}
-                                  onChange={(e) => setEditingItem({ ...editingItem, category: e.target.value })}
-                                  className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none text-slate-700 font-semibold"
-                                >
-                                  <option value="Produce">Produce</option>
-                                  <option value="Dairy & Eggs">Dairy & Eggs</option>
-                                  <option value="Bakery">Bakery</option>
-                                  <option value="Meat & Seafood">Meat & Seafood</option>
-                                  <option value="Pantry">Pantry</option>
-                                  <option value="Household">Household</option>
-                                  <option value="Other">Other</option>
-                                </select>
-                              </div>
-                              <div>
-                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Location</label>
-                                <input 
-                                  type="text"
-                                  value={editingItem.location || ''}
-                                  onChange={(e) => setEditingItem({ ...editingItem, location: e.target.value })}
-                                  className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none text-slate-700"
-                                />
-                              </div>
-                            </div>
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
-                                <Clock className="w-3 h-3 text-indigo-500" /> Recurrence Period
-                              </label>
-                              <select
-                                value={editingItem.intervalDays}
-                                onChange={(e) => setEditingItem({ ...editingItem, intervalDays: parseInt(e.target.value) })}
-                                className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none text-slate-700"
-                              >
-                                <option value={0}>No recurrence</option>
-                                <option value={3}>Every 3 Days</option>
-                                <option value={7}>Every 7 Days</option>
-                                <option value={14}>Every 14 Days</option>
-                                <option value={30}>Every 30 Days</option>
-                              </select>
-                            </div>
-                            <div className="flex justify-end gap-1.5 pt-2 border-t border-slate-100">
-                              <button
-                                type="button"
-                                onClick={() => setEditingItem(null)}
-                                className="px-2.5 py-1 text-slate-500 hover:text-slate-800 font-bold text-[11px] transition"
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                type="submit"
-                                className="bg-slate-900 hover:bg-slate-800 text-white font-bold px-3 py-1 rounded-lg text-[11px] transition shadow-sm"
-                              >
-                                Save
-                              </button>
-                            </div>
-                          </form>
-                        );
-                      }
-
-                      return (
-                        <div 
-                          key={item.id} 
-                          onClick={() => setEditingItem(item)}
-                          className="bg-slate-50 rounded-2xl border border-slate-200 p-4 shadow-sm flex items-start gap-3 opacity-60 relative group cursor-pointer"
-                        >
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleItem(item.id);
-                            }}
-                            className="mt-1 w-5.5 h-5.5 rounded-lg bg-green-500 border-2 border-green-500 flex items-center justify-center transition shrink-0 text-white"
-                          >
-                            <Check className="w-4 h-4 stroke-[3]" />
-                          </button>
-                          
-                          <div className="flex-1 min-w-0 pr-6">
-                            <p className="font-medium text-slate-500 line-through text-sm break-words">{item.name}</p>
-                            <span className="inline-block bg-slate-200 text-slate-500 text-[9px] font-bold px-2 py-0.5 rounded-full mt-1">
-                              {item.category}
-                            </span>
-                          </div>
-
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteItem(item.id);
-                            }}
-                            className="opacity-0 group-hover:opacity-100 hover:text-red-500 text-slate-400 transition p-1 rounded-lg hover:bg-slate-100 shrink-0"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-            </div>
-          </div>
+          <ActiveListTab
+            items={items}
+            newItemName={newItemName}
+            setNewItemName={setNewItemName}
+            newItemRecurrence={newItemRecurrence}
+            setNewItemRecurrence={setNewItemRecurrence}
+            handleAddSubmit={handleAddSubmit}
+            setActiveTab={setActiveTab}
+            sortMethod={sortMethod}
+            setSortMethod={setSortMethod}
+            triggerAILocationSort={triggerAILocationSort}
+            isSortingAI={isSortingAI}
+            geminiStatus={geminiStatus}
+            editingItem={editingItem}
+            setEditingItem={setEditingItem}
+            saveEditedItem={saveEditedItem}
+            toggleItem={toggleItem}
+            deleteItem={deleteItem}
+            sortedLists={sortedLists}
+          />
         )}
 
-        {/* VOICE & NLP SIMULATOR SANDBOX */}
         {activeTab === 'voice' && (
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 md:p-8 shadow-sm space-y-6">
-            
-            <div className="text-center max-w-xl mx-auto space-y-2">
-              <span className="bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">Voice Actions Interface</span>
-              <h2 className="text-2xl font-black text-slate-900">Hey Google / Gemini Simulator</h2>
-              <p className="text-sm text-slate-500">
-                Test the voice functionality. Say a natural phrase (such as *"add chicken breasts every 4 days"*), or simulate typing the command below to watch our NLP parsing engine extract rules instantly.
-              </p>
-            </div>
-
-            {/* Micro and visual panel */}
-            <div className="flex flex-col items-center justify-center p-6 bg-slate-50 rounded-2xl border border-slate-200 max-w-md mx-auto space-y-5 shadow-inner">
-              {/* Voice Language Selector Toggle */}
-              <div className="flex bg-slate-200/60 p-1 rounded-xl gap-1 text-[11px] font-bold">
-                <button
-                  type="button"
-                  onClick={() => setVoiceLang('en-US')}
-                  disabled={isGeminiParsing}
-                  className={`px-3 py-1 rounded-lg transition-all ${
-                    voiceLang === 'en-US' 
-                      ? 'bg-white text-slate-800 shadow-sm' 
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  🇺🇸 EN
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setVoiceLang('fr-FR')}
-                  disabled={isGeminiParsing}
-                  className={`px-3 py-1 rounded-lg transition-all ${
-                    voiceLang === 'fr-FR' 
-                      ? 'bg-white text-slate-800 shadow-sm' 
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  🇫🇷 FR
-                </button>
-              </div>
-
-              <button
-                onClick={toggleVoice}
-                disabled={isGeminiParsing}
-                className={`w-20 h-20 rounded-full flex items-center justify-center text-white transition-all transform hover:scale-105 shadow-xl ${
-                  isGeminiParsing
-                    ? 'bg-indigo-600 animate-pulse ring-8 ring-indigo-100 cursor-not-allowed'
-                    : isVoiceActive 
-                      ? 'bg-red-500 animate-pulse ring-8 ring-red-100' 
-                      : 'bg-amber-500 hover:bg-amber-600 ring-8 ring-amber-100'
-                }`}
-              >
-                {isGeminiParsing ? (
-                  <Sparkles className="w-8 h-8 text-amber-200 animate-spin" />
-                ) : isVoiceActive ? (
-                  <MicOff className="w-8 h-8" />
-                ) : (
-                  <Mic className="w-8 h-8" />
-                )}
-              </button>
-              
-              <div className="text-center w-full">
-                <p className="font-bold text-sm text-slate-800">
-                  {isGeminiParsing ? 'Analyzing command...' : isVoiceActive ? 'Listening...' : 'Microphone Ready'}
-                </p>
-                <p className="text-xs text-slate-500 mt-1.5 px-2 leading-relaxed">{voiceStatus}</p>
-              </div>
-
-              {voiceResultText && (
-                <div className="bg-white px-4 py-3 rounded-xl border border-slate-200 text-xs font-mono w-full text-center shadow-sm">
-                  <span className="text-[10px] text-indigo-500 font-extrabold uppercase block mb-1">Raw Command Parsed:</span>
-                  "{voiceResultText}"
-                </div>
-              )}
-
-              {/* Interactive Fallback Text Input Console */}
-              <div className="w-full pt-4 border-t border-slate-200">
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 text-center">
-                  Or Type Dynamic Voice Phrase Instead:
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="e.g. Add paper towels every 5 days..."
-                    id="manualVoiceInput"
-                    disabled={isGeminiParsing}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        handleManualVoiceSimulate(e.target.value);
-                        e.target.value = '';
-                      }
-                    }}
-                    className="flex-1 px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-800 font-medium disabled:opacity-50"
-                  />
-                  <button
-                    onClick={() => {
-                      const inputEl = document.getElementById('manualVoiceInput');
-                      if (inputEl && inputEl.value) {
-                        handleManualVoiceSimulate(inputEl.value);
-                        inputEl.value = '';
-                      }
-                    }}
-                    disabled={isGeminiParsing}
-                    className="bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white px-4 py-2 rounded-xl text-xs font-bold transition duration-150 shadow-sm"
-                  >
-                    Simulate
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Quick Simulate Presets */}
-            <div className="space-y-4 max-w-2xl mx-auto">
-              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest text-center font-semibold">Simulated Preset Shortcuts (Click one to test)</h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                <button
-                  onClick={() => handleManualVoiceSimulate("Add organic milk every 7 days")}
-                  disabled={isGeminiParsing}
-                  className="bg-white hover:bg-slate-50 disabled:opacity-55 p-3.5 rounded-xl border border-slate-200 hover:border-amber-400 text-left transition flex items-center gap-3"
-                >
-                  <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
-                  <div>
-                    <span className="block text-xs font-mono font-bold text-slate-800">"Add organic milk every 7 days"</span>
-                    <span className="text-[10px] text-slate-400">Add milk stapled to weekly temporal recurrence</span>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => handleManualVoiceSimulate("Put baby spinach leaves on my list every 3 days")}
-                  disabled={isGeminiParsing}
-                  className="bg-white hover:bg-slate-50 disabled:opacity-55 p-3.5 rounded-xl border border-slate-200 hover:border-amber-400 text-left transition flex items-center gap-3"
-                >
-                  <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
-                  <div>
-                    <span className="block text-xs font-mono font-bold text-slate-800">"Put baby spinach leaves... every 3 days"</span>
-                    <span className="text-[10px] text-slate-400">High frequency healthy grocery automatic setting</span>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => handleManualVoiceSimulate("Hey Google add whole wheat bread to the list")}
-                  disabled={isGeminiParsing}
-                  className="bg-white hover:bg-slate-50 disabled:opacity-55 p-3.5 rounded-xl border border-slate-200 hover:border-amber-400 text-left transition flex items-center gap-3"
-                >
-                  <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
-                  <div>
-                    <span className="block text-xs font-mono font-bold text-slate-800">"Hey Google add whole wheat bread"</span>
-                    <span className="text-[10px] text-slate-400">Simple add command without recurrence</span>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => handleManualVoiceSimulate("Remind me to buy paper towels weekly")}
-                  disabled={isGeminiParsing}
-                  className="bg-white hover:bg-slate-50 disabled:opacity-55 p-3.5 rounded-xl border border-slate-200 hover:border-amber-400 text-left transition flex items-center gap-3"
-                >
-                  <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
-                  <div>
-                    <span className="block text-xs font-mono font-bold text-slate-800">"Remind me to buy paper towels weekly"</span>
-                    <span className="text-[10px] text-slate-400">Map weekly keywords straight to temporal engine</span>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-          </div>
+          <VoiceSandboxTab
+            voiceLang={voiceLang}
+            setVoiceLang={setVoiceLang}
+            isGeminiParsing={isGeminiParsing}
+            isVoiceActive={isVoiceActive}
+            toggleVoice={toggleVoice}
+            voiceStatus={voiceStatus}
+            voiceResultText={voiceResultText}
+            handleManualVoiceSimulate={handleManualVoiceSimulate}
+          />
         )}
 
-        {/* ANALYTICS & HISTORY DASHBOARD */}
         {activeTab === 'analytics' && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            
-            {/* Left Column: Frequent items Bar Chart */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm md:col-span-2 space-y-4">
-              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-amber-500" /> Frequent Items History & Analytics
-              </h3>
-              <p className="text-xs text-slate-500">
-                Organized logs of the items checked off most frequently. This history helps feed our predictive recurrence recommendation algorithms.
-              </p>
-
-              {/* Simple Chart simulation */}
-              <div className="space-y-3.5 pt-4">
-                {[...items, ...ITEM_SUGGESTIONS]
-                  .sort((a, b) => b.frequencyCount - a.frequencyCount)
-                  .slice(0, 5)
-                  .map((item, idx) => {
-                    // Normalize bar widths
-                    const maxFreq = 22;
-                    const percentWidth = Math.min((item.frequencyCount / maxFreq) * 100, 100);
-
-                    return (
-                      <div key={idx} className="space-y-1">
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="font-semibold text-slate-800">{item.name}</span>
-                          <span className="font-bold text-slate-500">{item.frequencyCount} purchases</span>
-                        </div>
-                        <div className="h-3 bg-slate-100 rounded-full overflow-hidden flex">
-                          <div 
-                            style={{ width: `${percentWidth}%` }}
-                            className={`h-full rounded-full transition-all duration-500 ${
-                              idx === 0 ? 'bg-amber-500' :
-                              idx === 1 ? 'bg-amber-400' :
-                              idx === 2 ? 'bg-indigo-500' :
-                              idx === 3 ? 'bg-indigo-400' : 'bg-slate-400'
-                            }`}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
-
-            {/* Right Column: Predictive Recommendations */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
-              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-500" /> AI Suggestions
-              </h3>
-              <p className="text-xs text-slate-500">
-                Based on your historical family grocery intervals, we suggest adding these back to your list:
-              </p>
-
-              <div className="space-y-3 pt-2">
-                {ITEM_SUGGESTIONS.slice(0, 3).map((item, index) => (
-                  <div key={index} className="p-3 bg-slate-50 hover:bg-amber-50/10 rounded-xl border border-slate-100 flex items-center justify-between gap-2">
-                    <div>
-                      <h4 className="font-bold text-slate-800 text-xs">{item.name}</h4>
-                      <p className="text-[10px] text-slate-400">Location: {item.location}</p>
-                    </div>
-                    <button
-                      onClick={() => {
-                        addItemDirectly(item.name, 0);
-                        addNotification(`Added suggested item: ${item.name}`);
-                      }}
-                      className="bg-slate-950 text-white hover:bg-slate-800 text-[10px] font-bold px-2.5 py-1 rounded-lg transition"
-                    >
-                      Add
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-          </div>
+          <AnalyticsTab
+            items={items}
+            addItemDirectly={addItemDirectly}
+            addNotification={addNotification}
+          />
         )}
-
       </main>
 
-      {/* Footer info */}
-      <footer className="bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-400">
-        <p>&copy; 2026 SmartList AI Ecosystem. Ready for seamless cross-platform deployment.</p>
-      </footer>
-
+      <Footer />
     </div>
   );
 }
