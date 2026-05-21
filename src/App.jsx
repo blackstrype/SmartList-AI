@@ -185,7 +185,7 @@ export default function App() {
         } else if (errType === 'audio-capture') {
           friendlyMsg = "Microphone hardware capture failed. Check your connection or busy state.";
         } else if (errType === 'network') {
-          friendlyMsg = "Speech recognition network communication failed.";
+          friendlyMsg = "Speech recognition network communication failed. Note: Web Speech API (Chrome/Safari) requires connection to speech recognition cloud servers. Please check your connection, run the app directly at http://localhost:5174/, or use the interactive Text Simulator below!";
         } else {
           friendlyMsg = `Microphone access error (${errType}). If in a sandboxed preview, please open http://localhost:5174/ directly.`;
         }
