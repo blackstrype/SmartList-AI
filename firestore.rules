@@ -1,0 +1,31 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// This security rules file assumes the following data structures:
+//
+// Collection: items
+// Document ID: auto-generated or chronological string
+// Fields:
+//   - name: string (required) - name of the grocery item
+//   - checked: boolean (required) - status of the item
+//   - category: string (required) - category (e.g. Produce, Bakery)
+//   - aisle: string (required) - physical location/aisle
+//   - frequencyCount: number (required) - frequency count for analytics
+//   - intervalDays: number (required) - recurrence threshold in days
+//   - lastAdded: number (required) - epoch timestamp of when item was added/toggled
+//   - autoAdded: boolean (required) - true if added by recurrence engine
+//   - createdAt: number (required) - timestamp of document creation
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /items/{itemId} {
+      // Currently in prototype mode (no authentication is implemented yet).
+      // Allows public access for prototype testing.
+      allow read, write: if true;
+    }
+  }
+}

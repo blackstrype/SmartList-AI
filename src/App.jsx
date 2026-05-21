@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { db } from './firebase';
+import { collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, writeBatch } from 'firebase/firestore';
 import { 
   Check, 
   Plus, 
@@ -74,7 +76,7 @@ const CATEGORY_MAP = {
 };
 
 export default function App() {
-  const [items, setItems] = useState(INITIAL_ITEMS);
+  const [items, setItems] = useState([]);
   const [newItemName, setNewItemName] = useState('');
   const [newItemRecurrence, setNewItemRecurrence] = useState(0); // 0 = no recurrence
   const [activeTab, setActiveTab] = useState('list'); // 'list' | 'analytics' | 'voice' | 'settings'
@@ -92,6 +94,39 @@ export default function App() {
     const saved = localStorage.getItem('smartlist_show_welcome');
     return saved !== null ? JSON.parse(saved) : true;
   });
+
+  // Sync with Firestore and seed INITIAL_ITEMS if empty
+  useEffect(() => {
+    const colRef = collection(db, "items");
+    const unsubscribe = onSnapshot(colRef, async (snapshot) => {
+      if (snapshot.empty) {
+        console.log("Firestore collection 'items' is empty. Seeding INITIAL_ITEMS...");
+        const batch = writeBatch(db);
+        INITIAL_ITEMS.forEach((item) => {
+          const { id, ...itemData } = item;
+          // Add a createdAt timestamp for chronological ordering
+          itemData.createdAt = Date.now() - (6 - parseInt(id)) * 1000;
+          const docRef = doc(db, "items", id);
+          batch.set(docRef, itemData);
+        });
+        try {
+          await batch.commit();
+        } catch (err) {
+          console.error("Error seeding Firestore database: ", err);
+        }
+      } else {
+        const itemsList = [];
+        snapshot.forEach((doc) => {
+          itemsList.push({ id: doc.id, ...doc.data() });
+        });
+        // Sort items by createdAt descending (newest on top) to match "As Added" order
+        itemsList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        setItems(itemsList);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const handleDismissWelcome = () => {
     setShowWelcome(false);
@@ -202,39 +237,42 @@ export default function App() {
   };
 
   // Simulates passage of time to trigger automatic recurrence updates
-  const handleTimeTravel = (days) => {
+  const handleTimeTravel = async (days) => {
     const newShift = timeShiftDays + days;
     setTimeShiftDays(newShift);
 
-    // Calculate which items should automatically jump back on the active list
-    setItems(prevItems => {
-      let updatedCount = 0;
-      const nextItems = prevItems.map(item => {
-        // Only trigger recurrence for checked items or items already inactive that have recurrence configurations
-        if (item.intervalDays > 0) {
-          // Calculate when it should trigger based on lastAdded + shift
-          const msSinceLast = Date.now() + (newShift * 24 * 60 * 60 * 1000) - item.lastAdded;
-          const daysSinceLast = msSinceLast / (24 * 60 * 60 * 1000);
+    const batch = writeBatch(db);
+    let updatedCount = 0;
 
-          if (daysSinceLast >= item.intervalDays && item.checked) {
-            updatedCount++;
-            return {
-              ...item,
-              checked: false, // Automatically put back in action
-              lastAdded: Date.now() + (newShift * 24 * 60 * 60 * 1000), // Reset clock
-              autoAdded: true, // Tag it visually
-              frequencyCount: item.frequencyCount + 1
-            };
-          }
+    items.forEach(item => {
+      if (item.intervalDays > 0) {
+        const msSinceLast = Date.now() + (newShift * 24 * 60 * 60 * 1000) - item.lastAdded;
+        const daysSinceLast = msSinceLast / (24 * 60 * 60 * 1000);
+
+        if (daysSinceLast >= item.intervalDays && item.checked) {
+          updatedCount++;
+          const docRef = doc(db, "items", item.id);
+          batch.update(docRef, {
+            checked: false, // Automatically put back in action
+            lastAdded: Date.now() + (newShift * 24 * 60 * 60 * 1000), // Reset clock
+            autoAdded: true, // Tag it visually
+            frequencyCount: item.frequencyCount + 1
+          });
         }
-        return item;
-      });
-
-      if (updatedCount > 0) {
-        addNotification(`Temporal Engine: ${updatedCount} recurring item(s) automatically re-added to your grocery list!`);
       }
-      return nextItems;
     });
+
+    if (updatedCount > 0) {
+      try {
+        await batch.commit();
+        addNotification(`Temporal Engine: ${updatedCount} recurring item(s) automatically re-added to your grocery list!`);
+      } catch (err) {
+        console.error("Error committing batch update: ", err);
+        addNotification("Error updating recurring items.");
+      }
+    } else {
+      addNotification(`Temporal Engine: Advanced ${days} days. No recurring items reached their threshold.`);
+    }
   };
 
   const addNotification = (msg) => {
@@ -286,7 +324,7 @@ export default function App() {
     processVoiceCommand(text);
   };
 
-  const addItemDirectly = (name, days, isVoice = false) => {
+  const addItemDirectly = async (name, days, isVoice = false) => {
     // Determine category and aisle based on simple name-matching database lookup
     let category = 'Other';
     let aisle = 'Aisle 10';
@@ -301,7 +339,6 @@ export default function App() {
     }
 
     const newItem = {
-      id: Date.now().toString(),
       name,
       checked: false,
       category,
@@ -309,10 +346,16 @@ export default function App() {
       frequencyCount: isVoice ? 2 : 1,
       intervalDays: days,
       lastAdded: Date.now() + (timeShiftDays * 24 * 60 * 60 * 1000),
-      autoAdded: isVoice
+      autoAdded: isVoice,
+      createdAt: Date.now()
     };
 
-    setItems(prev => [newItem, ...prev]);
+    try {
+      await addDoc(collection(db, "items"), newItem);
+    } catch (err) {
+      console.error("Error adding document to Firestore: ", err);
+      addNotification("Error adding item to database.");
+    }
   };
 
   const handleAddSubmit = (e) => {
@@ -324,43 +367,53 @@ export default function App() {
     setNewItemRecurrence(0);
   };
 
-  const toggleItem = (id) => {
-    setItems(prev => prev.map(item => {
-      if (item.id === id) {
-        const isChecking = !item.checked;
-        return {
-          ...item,
-          checked: isChecking,
-          frequencyCount: isChecking ? item.frequencyCount + 1 : item.frequencyCount,
-          lastAdded: isChecking ? Date.now() + (timeShiftDays * 24 * 60 * 60 * 1000) : item.lastAdded,
-          autoAdded: isChecking ? false : item.autoAdded
-        };
-      }
-      return item;
-    }));
+  const toggleItem = async (id) => {
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+
+    const isChecking = !item.checked;
+    const docRef = doc(db, "items", id);
+    try {
+      await updateDoc(docRef, {
+        checked: isChecking,
+        frequencyCount: isChecking ? item.frequencyCount + 1 : item.frequencyCount,
+        lastAdded: isChecking ? Date.now() + (timeShiftDays * 24 * 60 * 60 * 1000) : item.lastAdded,
+        autoAdded: isChecking ? false : item.autoAdded
+      });
+    } catch (err) {
+      console.error("Error updating document in Firestore: ", err);
+      addNotification("Error updating item status.");
+    }
   };
 
-  const deleteItem = (id) => {
-    setItems(prev => prev.filter(item => item.id !== id));
+  const deleteItem = async (id) => {
+    const docRef = doc(db, "items", id);
+    try {
+      await deleteDoc(docRef);
+    } catch (err) {
+      console.error("Error deleting document from Firestore: ", err);
+      addNotification("Error deleting item.");
+    }
   };
 
-  const saveEditedItem = (e) => {
+  const saveEditedItem = async (e) => {
     e.preventDefault();
     if (!editingItem.name.trim()) return;
     
-    setItems(prev => prev.map(item => {
-      if (item.id === editingItem.id) {
-        return {
-          ...editingItem,
-          name: editingItem.name.trim(),
-          // If editing updated lastAdded dynamically or reset time, handle here if needed
-        };
-      }
-      return item;
-    }));
-    
-    addNotification(`Saved: ${editingItem.name}`);
-    setEditingItem(null);
+    const docRef = doc(db, "items", editingItem.id);
+    try {
+      await updateDoc(docRef, {
+        name: editingItem.name.trim(),
+        category: editingItem.category,
+        aisle: editingItem.aisle,
+        intervalDays: editingItem.intervalDays
+      });
+      addNotification(`Saved: ${editingItem.name}`);
+      setEditingItem(null);
+    } catch (err) {
+      console.error("Error updating document in Firestore: ", err);
+      addNotification("Error saving item edits.");
+    }
   };
 
   // Simulates Gemini Cognitive Aisle Sorting Process
