@@ -36,52 +36,52 @@ const snapInterval = (days) => {
 
 // Pre-configured typical items for the simulation
 const INITIAL_ITEMS = [
-  { id: '1', name: 'Organic Milk 2%', checked: false, category: 'Dairy & Eggs', aisle: 'Aisle 1', frequencyCount: 14, intervalDays: 7, lastAdded: Date.now() - (6 * 24 * 60 * 60 * 1000), autoAdded: false },
-  { id: '2', name: 'Whole Wheat Bread', checked: false, category: 'Bakery', aisle: 'Aisle 2', frequencyCount: 12, intervalDays: 7, lastAdded: Date.now() - (4 * 24 * 60 * 60 * 1000), autoAdded: false },
-  { id: '3', name: 'Fresh Bananas', checked: false, category: 'Produce', aisle: 'Aisle A (Entrance)', frequencyCount: 18, intervalDays: 0, lastAdded: Date.now() - (3 * 24 * 60 * 60 * 1000), autoAdded: false },
-  { id: '4', name: 'Greek Yogurt (Vanilla)', checked: true, category: 'Dairy & Eggs', aisle: 'Aisle 1', frequencyCount: 8, intervalDays: 7, lastAdded: Date.now() - (2 * 24 * 60 * 60 * 1000), autoAdded: false },
-  { id: '5', name: 'Avocados', checked: false, category: 'Produce', aisle: 'Aisle A (Entrance)', frequencyCount: 9, intervalDays: 0, lastAdded: Date.now(), autoAdded: false },
-  { id: '6', name: 'Paper Towels', checked: true, category: 'Household', aisle: 'Aisle 12', frequencyCount: 5, intervalDays: 30, lastAdded: Date.now() - (15 * 24 * 60 * 60 * 1000), autoAdded: false }
+  { id: '1', name: 'Organic Milk 2%', checked: false, category: 'Dairy & Eggs', location: 'Supermarché', frequencyCount: 14, intervalDays: 7, lastAdded: Date.now() - (6 * 24 * 60 * 60 * 1000), autoAdded: false },
+  { id: '2', name: 'Whole Wheat Bread', checked: false, category: 'Bakery', location: 'Boulangerie', frequencyCount: 12, intervalDays: 7, lastAdded: Date.now() - (4 * 24 * 60 * 60 * 1000), autoAdded: false },
+  { id: '3', name: 'Fresh Bananas', checked: false, category: 'Produce', location: 'Primeur', frequencyCount: 18, intervalDays: 0, lastAdded: Date.now() - (3 * 24 * 60 * 60 * 1000), autoAdded: false },
+  { id: '4', name: 'Greek Yogurt (Vanilla)', checked: true, category: 'Dairy & Eggs', location: 'Supermarché', frequencyCount: 8, intervalDays: 7, lastAdded: Date.now() - (2 * 24 * 60 * 60 * 1000), autoAdded: false },
+  { id: '5', name: 'Avocados', checked: false, category: 'Produce', location: 'Primeur', frequencyCount: 9, intervalDays: 0, lastAdded: Date.now(), autoAdded: false },
+  { id: '6', name: 'Paper Towels', checked: true, category: 'Household', location: 'Supermarché', frequencyCount: 5, intervalDays: 30, lastAdded: Date.now() - (15 * 24 * 60 * 60 * 1000), autoAdded: false }
 ];
 
 const ITEM_SUGGESTIONS = [
-  { name: 'Eggs (Large Grade A)', category: 'Dairy & Eggs', aisle: 'Aisle 1', frequencyCount: 22 },
-  { name: 'Spinach (Baby Leaves)', category: 'Produce', aisle: 'Aisle A (Entrance)', frequencyCount: 15 },
-  { name: 'Chicken Breasts', category: 'Meat & Seafood', aisle: 'Aisle 3', frequencyCount: 11 },
-  { name: 'Apples (Honeycrisp)', category: 'Produce', aisle: 'Aisle A (Entrance)', frequencyCount: 10 },
-  { name: 'Toilet Paper 12-Pack', category: 'Household', aisle: 'Aisle 12', frequencyCount: 4 },
-  { name: 'Pasta Sauce (Marinara)', category: 'Pantry', aisle: 'Aisle 6', frequencyCount: 7 }
+  { name: 'Eggs (Large Grade A)', category: 'Dairy & Eggs', location: 'Primeur', frequencyCount: 22 },
+  { name: 'Spinach (Baby Leaves)', category: 'Produce', location: 'Primeur', frequencyCount: 15 },
+  { name: 'Chicken Breasts', category: 'Meat & Seafood', location: 'Boucherie', frequencyCount: 11 },
+  { name: 'Apples (Honeycrisp)', category: 'Produce', location: 'Primeur', frequencyCount: 10 },
+  { name: 'Toilet Paper 12-Pack', category: 'Household', location: 'Supermarché', frequencyCount: 4 },
+  { name: 'Pasta Sauce (Marinara)', category: 'Pantry', location: 'Épicerie', frequencyCount: 7 }
 ];
 
 // Helper to map dynamic terms to standard grocery categories
 const CATEGORY_MAP = {
-  milk: { category: 'Dairy & Eggs', aisle: 'Aisle 1' },
-  cheese: { category: 'Dairy & Eggs', aisle: 'Aisle 1' },
-  egg: { category: 'Dairy & Eggs', aisle: 'Aisle 1' },
-  yogurt: { category: 'Dairy & Eggs', aisle: 'Aisle 1' },
-  butter: { category: 'Dairy & Eggs', aisle: 'Aisle 1' },
-  bread: { category: 'Bakery', aisle: 'Aisle 2' },
-  croissant: { category: 'Bakery', aisle: 'Aisle 2' },
-  bagel: { category: 'Bakery', aisle: 'Aisle 2' },
-  apple: { category: 'Produce', aisle: 'Aisle A (Entrance)' },
-  banana: { category: 'Produce', aisle: 'Aisle A (Entrance)' },
-  berry: { category: 'Produce', aisle: 'Aisle A (Entrance)' },
-  spinach: { category: 'Produce', aisle: 'Aisle A (Entrance)' },
-  tomato: { category: 'Produce', aisle: 'Aisle A (Entrance)' },
-  avocado: { category: 'Produce', aisle: 'Aisle A (Entrance)' },
-  steak: { category: 'Meat & Seafood', aisle: 'Aisle 3' },
-  chicken: { category: 'Meat & Seafood', aisle: 'Aisle 3' },
-  salmon: { category: 'Meat & Seafood', aisle: 'Aisle 3' },
-  shrimp: { category: 'Meat & Seafood', aisle: 'Aisle 3' },
-  paper: { category: 'Household', aisle: 'Aisle 12' },
-  napkin: { category: 'Household', aisle: 'Aisle 12' },
-  soap: { category: 'Household', aisle: 'Aisle 11' },
-  shampoo: { category: 'Household', aisle: 'Aisle 11' },
-  pasta: { category: 'Pantry', aisle: 'Aisle 6' },
-  sauce: { category: 'Pantry', aisle: 'Aisle 6' },
-  rice: { category: 'Pantry', aisle: 'Aisle 6' },
-  cereal: { category: 'Pantry', aisle: 'Aisle 5' },
-  coffee: { category: 'Pantry', aisle: 'Aisle 5' }
+  milk: { category: 'Dairy & Eggs', location: 'Supermarché' },
+  cheese: { category: 'Dairy & Eggs', location: 'Supermarché' },
+  egg: { category: 'Dairy & Eggs', location: 'Primeur' },
+  yogurt: { category: 'Dairy & Eggs', location: 'Supermarché' },
+  butter: { category: 'Dairy & Eggs', location: 'Supermarché' },
+  bread: { category: 'Bakery', location: 'Boulangerie' },
+  croissant: { category: 'Bakery', location: 'Boulangerie' },
+  bagel: { category: 'Bakery', location: 'Boulangerie' },
+  apple: { category: 'Produce', location: 'Primeur' },
+  banana: { category: 'Produce', location: 'Primeur' },
+  berry: { category: 'Produce', location: 'Primeur' },
+  spinach: { category: 'Produce', location: 'Primeur' },
+  tomato: { category: 'Produce', location: 'Primeur' },
+  avocado: { category: 'Produce', location: 'Primeur' },
+  steak: { category: 'Meat & Seafood', location: 'Boucherie' },
+  chicken: { category: 'Meat & Seafood', location: 'Boucherie' },
+  salmon: { category: 'Meat & Seafood', location: 'Boucherie' },
+  shrimp: { category: 'Meat & Seafood', location: 'Boucherie' },
+  paper: { category: 'Household', location: 'Supermarché' },
+  napkin: { category: 'Household', location: 'Supermarché' },
+  soap: { category: 'Household', location: 'Supermarché' },
+  shampoo: { category: 'Household', location: 'Supermarché' },
+  pasta: { category: 'Pantry', location: 'Épicerie' },
+  sauce: { category: 'Pantry', location: 'Épicerie' },
+  rice: { category: 'Pantry', location: 'Épicerie' },
+  cereal: { category: 'Pantry', location: 'Épicerie' },
+  coffee: { category: 'Pantry', location: 'Épicerie' }
 };
 
 export default function App() {
@@ -89,7 +89,7 @@ export default function App() {
   const [newItemName, setNewItemName] = useState('');
   const [newItemRecurrence, setNewItemRecurrence] = useState(0); // 0 = no recurrence
   const [activeTab, setActiveTab] = useState('list'); // 'list' | 'analytics' | 'voice' | 'settings'
-  const [sortMethod, setSortMethod] = useState('none'); // 'none' | 'aisle' | 'alphabetical'
+  const [sortMethod, setSortMethod] = useState('none'); // 'none' | 'location' | 'alphabetical'
   const [isVoiceActive, setIsVoiceActive] = useState(false);
   const [voiceResultText, setVoiceResultText] = useState('');
   const [voiceStatus, setVoiceStatus] = useState('Click mic to speak to Gemini...');
@@ -130,6 +130,7 @@ export default function App() {
           itemsList.push({ 
             id: doc.id, 
             ...data,
+            location: data.location !== undefined ? data.location : (data.aisle || 'Supermarché'),
             intervalDays: snapInterval(data.intervalDays)
           });
         });
@@ -339,15 +340,15 @@ export default function App() {
   };
 
   const addItemDirectly = async (name, days, isVoice = false) => {
-    // Determine category and aisle based on simple name-matching database lookup
+    // Determine category and location based on simple name-matching database lookup
     let category = 'Other';
-    let aisle = 'Aisle 10';
+    let location = 'Supermarché';
 
     const lowerName = name.toLowerCase();
     for (const key in CATEGORY_MAP) {
       if (lowerName.includes(key)) {
         category = CATEGORY_MAP[key].category;
-        aisle = CATEGORY_MAP[key].aisle;
+        location = CATEGORY_MAP[key].location;
         break;
       }
     }
@@ -356,7 +357,7 @@ export default function App() {
       name,
       checked: false,
       category,
-      aisle,
+      location,
       frequencyCount: isVoice ? 2 : 1,
       intervalDays: snapInterval(days),
       lastAdded: Date.now() + (timeShiftDays * 24 * 60 * 60 * 1000),
@@ -419,7 +420,7 @@ export default function App() {
       await updateDoc(docRef, {
         name: editingItem.name.trim(),
         category: editingItem.category,
-        aisle: editingItem.aisle,
+        location: editingItem.location,
         intervalDays: editingItem.intervalDays
       });
       addNotification(`Saved: ${editingItem.name}`);
@@ -430,18 +431,18 @@ export default function App() {
     }
   };
 
-  // Simulates Gemini Cognitive Aisle Sorting Process
-  const triggerAIAisleSort = () => {
+  // Simulates Gemini Cognitive Location Sorting Process
+  const triggerAILocationSort = () => {
     setIsSortingAI(true);
-    setGeminiStatus('Gemini is mapping physical layouts to item categories...');
+    setGeminiStatus('Gemini is mapping shopping locations to your list items...');
 
     setTimeout(() => {
       setGeminiStatus('Rearranging items dynamically for optimal walking path...');
       setTimeout(() => {
-        setSortMethod('aisle');
+        setSortMethod('location');
         setIsSortingAI(false);
         setGeminiStatus('');
-        addNotification('Gemini optimized your grocery list by aisle layout!');
+        addNotification('Gemini optimized your grocery list by location layout!');
       }, 1000);
     }, 1200);
   };
@@ -454,27 +455,17 @@ export default function App() {
     const sortFn = (a, b) => {
       if (sortMethod === 'alphabetical') {
         return a.name.localeCompare(b.name);
-      } else if (sortMethod === 'aisle') {
-        // Physical layout ordering simulation: Entrance -> Aisle 1 -> Aisle 2 -> ... -> Housewares
-        const aisleOrder = {
-          'Produce': 1,
-          'Aisle A (Entrance)': 1,
-          'Bakery': 2,
-          'Aisle 2': 2,
-          'Dairy & Eggs': 3,
-          'Aisle 1': 3,
-          'Meat & Seafood': 4,
-          'Aisle 3': 4,
-          'Pantry': 5,
-          'Aisle 5': 5,
-          'Aisle 6': 6,
-          'Household': 7,
-          'Aisle 11': 7,
-          'Aisle 12': 8,
-          'Other': 9
+      } else if (sortMethod === 'location') {
+        // Physical layout ordering simulation by store/location: Greengrocer -> Bakery -> Butcher -> Dry Goods -> Supermarket
+        const locationOrder = {
+          'Primeur': 1,
+          'Boulangerie': 2,
+          'Boucherie': 3,
+          'Épicerie': 4,
+          'Supermarché': 5
         };
-        const orderA = aisleOrder[a.category] || aisleOrder[a.aisle] || 100;
-        const orderB = aisleOrder[b.category] || aisleOrder[b.aisle] || 100;
+        const orderA = locationOrder[a.location] || 100;
+        const orderB = locationOrder[b.location] || 100;
         return orderA - orderB;
       }
       return 0; // Default: Insertion order (reverse ID)
@@ -605,7 +596,7 @@ export default function App() {
                 <Sparkles className="w-5 h-5 text-amber-200 animate-pulse" /> Welcome to your SmartList AI Prototype!
               </h2>
               <p className="text-sm text-amber-50 opacity-90 leading-relaxed mb-4">
-                We are simulating a production Google Keep experience tailored with Google Gemini AI features. Test our <strong>"Hey Google / Gemini" voice shortcuts</strong> below, trigger the <strong>AI Aisle Sorter</strong>, or simulate the passage of days to trigger the <strong>Predictive Recurrence Engine</strong>!
+                We are simulating a production Google Keep experience tailored with Google Gemini AI features. Test our <strong>"Hey Google / Gemini" voice shortcuts</strong> below, trigger the <strong>AI Location Sorter</strong>, or simulate the passage of days to trigger the <strong>Predictive Recurrence Engine</strong>!
               </p>
               <div className="flex flex-wrap gap-2 text-xs">
                 <span className="bg-amber-400/30 px-3 py-1.5 rounded-lg border border-white/20 font-medium">✅ Real-Time Sync Simulated</span>
@@ -715,22 +706,22 @@ export default function App() {
                       A-Z
                     </button>
                     <button 
-                      onClick={() => setSortMethod('aisle')}
-                      className={`px-3 py-1.5 font-semibold flex items-center gap-1 ${sortMethod === 'aisle' ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
+                      onClick={() => setSortMethod('location')}
+                      className={`px-3 py-1.5 font-semibold flex items-center gap-1 ${sortMethod === 'location' ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'}`}
                     >
-                      Aisle Sorted
+                      Location Sorted
                     </button>
                   </div>
                 </div>
 
                 {/* Gemini AI Sort Trigger button */}
                 <button
-                  onClick={triggerAIAisleSort}
+                  onClick={triggerAILocationSort}
                   disabled={isSortingAI}
                   className="bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 disabled:opacity-50 text-white text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-md shadow-indigo-600/10 transition"
                 >
                   <Sparkles className={`w-3.5 h-3.5 text-indigo-200 ${isSortingAI ? 'animate-spin' : ''}`} />
-                  {isSortingAI ? 'Sorting Layout...' : 'AI Aisle Sort'}
+                  {isSortingAI ? 'Sorting Layout...' : 'AI Location Sort'}
                 </button>
               </div>
 
@@ -798,11 +789,11 @@ export default function App() {
                                 </select>
                               </div>
                               <div>
-                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Aisle</label>
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Location</label>
                                 <input 
                                   type="text"
-                                  value={editingItem.aisle}
-                                  onChange={(e) => setEditingItem({ ...editingItem, aisle: e.target.value })}
+                                  value={editingItem.location || ''}
+                                  onChange={(e) => setEditingItem({ ...editingItem, location: e.target.value })}
                                   className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none text-slate-700"
                                 />
                               </div>
@@ -880,7 +871,7 @@ export default function App() {
                                 {item.category}
                               </span>
                               <span className="bg-indigo-50 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5">
-                                📍 {item.aisle}
+                                📍 {item.location}
                               </span>
                             </div>
                           </div>
@@ -948,11 +939,11 @@ export default function App() {
                                 </select>
                               </div>
                               <div>
-                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Aisle</label>
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Location</label>
                                 <input 
                                   type="text"
-                                  value={editingItem.aisle}
-                                  onChange={(e) => setEditingItem({ ...editingItem, aisle: e.target.value })}
+                                  value={editingItem.location || ''}
+                                  onChange={(e) => setEditingItem({ ...editingItem, location: e.target.value })}
                                   className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none text-slate-700"
                                 />
                               </div>
@@ -1220,7 +1211,7 @@ export default function App() {
                   <div key={index} className="p-3 bg-slate-50 hover:bg-amber-50/10 rounded-xl border border-slate-100 flex items-center justify-between gap-2">
                     <div>
                       <h4 className="font-bold text-slate-800 text-xs">{item.name}</h4>
-                      <p className="text-[10px] text-slate-400">Aisle: {item.aisle}</p>
+                      <p className="text-[10px] text-slate-400">Location: {item.location}</p>
                     </div>
                     <button
                       onClick={() => {

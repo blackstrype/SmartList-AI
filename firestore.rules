@@ -10,7 +10,7 @@
 //   - name: string (required) - name of the grocery item
 //   - checked: boolean (required) - status of the item
 //   - category: string (required) - category (e.g. Produce, Bakery)
-//   - aisle: string (required) - physical location/aisle
+//   - location: string (required) - physical store/location
 //   - frequencyCount: number (required) - frequency count for analytics
 //   - intervalDays: number (required) - recurrence threshold in days
 //   - lastAdded: number (required) - epoch timestamp of when item was added/toggled

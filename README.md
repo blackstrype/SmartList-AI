@@ -9,8 +9,8 @@ SmartList AI is a predictive, real-time grocery list assistant. It leverages Clo
 - **Real-Time Sync**: Synced continuously with Cloud Firestore. Add, toggle, edit, or delete items, and watch them update instantly across devices.
 - **Predictive Recurrence Engine**: Set item recurrences to standard intervals (3 days, 7 days, 14 days, or 30 days). Checked items automatically reappear on your list when their recurrence period elapses.
 - **Time Travel Simulator**: Test and verify recurrence behaviors by simulating the passage of time (e.g., advancing the calendar by +1, +3, or +7 days) to see items reappear automatically.
-- **Gemini Voice Interface Simulator**: Speak or type natural language inputs (e.g., *"add whole wheat bread every 7 days"* or *"put greek yogurt on the list"*) to dynamically parse items, categories, aisles, and recurrence intervals.
-- **Cognitive Aisle Sorting**: Optimizes your shopping route by grouping and sorting grocery items dynamically by simulated supermarket aisle layouts (entrance first, household last).
+- **Gemini Voice Interface Simulator**: Speak or type natural language inputs (e.g., *"add whole wheat bread every 7 days"* or *"put greek yogurt on the list"*) to dynamically parse items, categories, locations, and recurrence intervals.
+- **Cognitive Location Sorting**: Optimizes your shopping route by grouping and sorting grocery items dynamically by simulated shopping locations (Greengrocer/Primeur first, Bakery, Butcher, Dry Goods, Supermarket).
 - **Dismissible Alerts**: Modern toast notification system and a welcome guide equipped with timeout-fading and instant dismissal options.
 
 ---
