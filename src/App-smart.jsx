@@ -124,12 +124,18 @@ export default function App() {
       rec.onerror = (event) => {
         console.error("Speech Recognition Error:", event);
         const errType = event.error || "security-block";
-        let friendlyMsg = `Voice input unavailable (${errType}).`;
+        let friendlyMsg = `Voice input unavailable (Code: ${errType}).`;
         
         if (errType === 'not-allowed') {
-          friendlyMsg = "Microphone access blocked. Please grant system/browser microphone permissions.";
+          friendlyMsg = "Microphone permission denied. Open http://localhost:5174/ in a browser tab to allow access.";
+        } else if (errType === 'no-speech') {
+          friendlyMsg = "No speech was detected. Click the microphone to try again.";
+        } else if (errType === 'audio-capture') {
+          friendlyMsg = "Microphone hardware capture failed. Check your connection or busy state.";
+        } else if (errType === 'network') {
+          friendlyMsg = "Speech recognition network communication failed.";
         } else {
-          friendlyMsg = "Microphone access is restricted inside this sandboxed development preview. Please use the interactive Text Simulator panel below!";
+          friendlyMsg = `Microphone access error (${errType}). If in a sandboxed preview, please open http://localhost:5174/ directly.`;
         }
         
         setVoiceStatus(friendlyMsg);
@@ -142,7 +148,7 @@ export default function App() {
 
       recognitionRef.current = rec;
     } else {
-      setVoiceStatus('Web Speech API not natively supported on this browser context. Please use the Text Simulator panel below!');
+      setVoiceStatus('Web Speech API not natively supported on this browser context. Try opening http://localhost:5174/ in a standard browser tab.');
     }
   }, []);
 
@@ -274,7 +280,7 @@ export default function App() {
         recognitionRef.current.start();
       } catch (e) {
         console.error("Failed to start voice recognition capture loop:", e);
-        setVoiceStatus('Microphone access blocked or restricted. Please type your phrase below instead!');
+        setVoiceStatus('Microphone start failed. Make sure permissions are granted and open http://localhost:5174/ directly.');
         setIsVoiceActive(false);
       }
     }
