@@ -93,6 +93,7 @@ export default function App() {
   const [isVoiceActive, setIsVoiceActive] = useState(false);
   const [voiceResultText, setVoiceResultText] = useState('');
   const [voiceStatus, setVoiceStatus] = useState('Click mic to speak to Gemini...');
+  const [voiceLang, setVoiceLang] = useState('en-US'); // 'en-US' | 'fr-FR'
   const [timeShiftDays, setTimeShiftDays] = useState(0); // Simulated time engine days elapsed
   const [notifications, setNotifications] = useState([]);
   const [isSortingAI, setIsSortingAI] = useState(false);
@@ -159,7 +160,7 @@ export default function App() {
       const rec = new SpeechRecognition();
       rec.continuous = false;
       rec.interimResults = false;
-      rec.lang = 'en-US';
+      rec.lang = voiceLang;
 
       rec.onstart = () => {
         setIsVoiceActive(true);
@@ -196,6 +197,16 @@ export default function App() {
       setVoiceStatus('Web Speech API not natively supported on this browser context. Please use the Text Simulator panel below!');
     }
   }, []);
+
+  // Sync voiceLang selection to SpeechRecognition instance dynamically
+  useEffect(() => {
+    if (recognitionRef.current) {
+      recognitionRef.current.lang = voiceLang;
+      // Also update instructions status text
+      const friendlyName = voiceLang === 'en-US' ? 'English' : 'French';
+      setVoiceStatus(`Language switched to ${friendlyName}. Click mic to speak to Gemini...`);
+    }
+  }, [voiceLang]);
 
   // Local regex-based command parser as fallback
   const processVoiceCommandFallback = (text) => {
@@ -246,7 +257,7 @@ export default function App() {
     try {
       const prompt = `You are a helpful grocery assistant. Analyze the user's voice command transcript to add one or more grocery items to a list.
 Extract:
-1. The capitalized name of the item (e.g. "Baguette", "Organic eggs").
+1. The capitalized name of the item. Use the language matching the spoken query (e.g., "Baguette" or "Pain" if spoken in French, "Eggs" or "Milk" if spoken in English).
 2. The category (MUST be one of: "Produce", "Dairy & Eggs", "Bakery", "Meat & Seafood", "Pantry", "Household", "Other").
 3. The French store location where the item is typically bought (MUST be one of: "Primeur", "Boulangerie", "Boucherie", "Épicerie", "Supermarché"). Guidelines:
    - "Primeur" (Greengrocer): fruits, vegetables, salad, fresh herbs, raw eggs.
@@ -255,19 +266,19 @@ Extract:
    - "Épicerie" (Dry goods/Pantry): pasta, rice, dry beans, spices, flour, sugar, coffee, tea, olive oil, canned foods.
    - "Supermarché" (Supermarket): dairy (milk, cheese, butter, cream, yogurt), household cleaners, paper towels, toilet paper, soap, shampoo, laundry detergent.
 4. The recurrence interval in days. Choose the closest standard interval from: 0, 3, 7, 14, 30. Use 0 if the user doesn't specify a recurrence (e.g. one-time item), or snap phrases like:
-   - "daily" or "every day" or "every 3 days" -> 3
-   - "weekly" or "every week" or "every 7 days" -> 7
-   - "biweekly" or "every 2 weeks" or "every 14 days" -> 14
-   - "monthly" or "every month" or "every 30 days" or "every 4 weeks" -> 30
+   - "daily" or "every day" or "every 3 days" (or "tous les jours", "chaque jour") -> 3
+   - "weekly" or "every week" or "every 7 days" (or "toutes les semaines", "chaque semaine") -> 7
+   - "biweekly" or "every 2 weeks" or "every 14 days" (or "toutes les deux semaines") -> 14
+   - "monthly" or "every month" or "every 30 days" or "every 4 weeks" (or "tous les mois", "chaque mois") -> 30
 
-If the command lists multiple items (e.g. "add eggs and bread"), parse them as separate items in the array.
+If the command lists multiple items (e.g. "add eggs and bread" or "ajoute des oeufs et du pain"), parse them as separate items in the array.
 Respond ONLY with a JSON array of objects. Example:
 [
   {"name": "Organic Milk", "category": "Dairy & Eggs", "location": "Supermarché", "intervalDays": 7},
   {"name": "Baguette", "category": "Bakery", "location": "Boulangerie", "intervalDays": 0}
 ]
 
-User Voice Command: "${text}"`;
+User Voice Command: "${text}" (The command is transcribed using speech recognition configured for language: ${voiceLang === 'en-US' ? 'English' : 'French'}. Support English or French terms).`;
 
       const result = await geminiModel.generateContent(prompt);
       const response = await result.response;
@@ -1098,6 +1109,34 @@ User Voice Command: "${text}"`;
 
             {/* Micro and visual panel */}
             <div className="flex flex-col items-center justify-center p-6 bg-slate-50 rounded-2xl border border-slate-200 max-w-md mx-auto space-y-5 shadow-inner">
+              {/* Voice Language Selector Toggle */}
+              <div className="flex bg-slate-200/60 p-1 rounded-xl gap-1 text-[11px] font-bold">
+                <button
+                  type="button"
+                  onClick={() => setVoiceLang('en-US')}
+                  disabled={isGeminiParsing}
+                  className={`px-3 py-1 rounded-lg transition-all ${
+                    voiceLang === 'en-US' 
+                      ? 'bg-white text-slate-800 shadow-sm' 
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  🇺🇸 EN
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVoiceLang('fr-FR')}
+                  disabled={isGeminiParsing}
+                  className={`px-3 py-1 rounded-lg transition-all ${
+                    voiceLang === 'fr-FR' 
+                      ? 'bg-white text-slate-800 shadow-sm' 
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  🇫🇷 FR
+                </button>
+              </div>
+
               <button
                 onClick={toggleVoice}
                 disabled={isGeminiParsing}
