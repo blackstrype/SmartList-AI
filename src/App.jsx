@@ -25,12 +25,21 @@ import {
   X
 } from 'lucide-react';
 
+// Helper to snap intervals to standard periods [0, 3, 7, 14, 30]
+const snapInterval = (days) => {
+  if (days === undefined || days === null || days <= 0) return 0;
+  if (days <= 4) return 3;
+  if (days <= 10) return 7;
+  if (days <= 21) return 14;
+  return 30;
+};
+
 // Pre-configured typical items for the simulation
 const INITIAL_ITEMS = [
   { id: '1', name: 'Organic Milk 2%', checked: false, category: 'Dairy & Eggs', aisle: 'Aisle 1', frequencyCount: 14, intervalDays: 7, lastAdded: Date.now() - (6 * 24 * 60 * 60 * 1000), autoAdded: false },
-  { id: '2', name: 'Whole Wheat Bread', checked: false, category: 'Bakery', aisle: 'Aisle 2', frequencyCount: 12, intervalDays: 5, lastAdded: Date.now() - (4 * 24 * 60 * 60 * 1000), autoAdded: false },
-  { id: '3', name: 'Fresh Bananas', checked: false, category: 'Produce', aisle: 'Aisle A (Entrance)', frequencyCount: 18, intervalDays: 4, lastAdded: Date.now() - (3 * 24 * 60 * 60 * 1000), autoAdded: false },
-  { id: '4', name: 'Greek Yogurt (Vanilla)', checked: true, category: 'Dairy & Eggs', aisle: 'Aisle 1', frequencyCount: 8, intervalDays: 10, lastAdded: Date.now() - (2 * 24 * 60 * 60 * 1000), autoAdded: false },
+  { id: '2', name: 'Whole Wheat Bread', checked: false, category: 'Bakery', aisle: 'Aisle 2', frequencyCount: 12, intervalDays: 7, lastAdded: Date.now() - (4 * 24 * 60 * 60 * 1000), autoAdded: false },
+  { id: '3', name: 'Fresh Bananas', checked: false, category: 'Produce', aisle: 'Aisle A (Entrance)', frequencyCount: 18, intervalDays: 0, lastAdded: Date.now() - (3 * 24 * 60 * 60 * 1000), autoAdded: false },
+  { id: '4', name: 'Greek Yogurt (Vanilla)', checked: true, category: 'Dairy & Eggs', aisle: 'Aisle 1', frequencyCount: 8, intervalDays: 7, lastAdded: Date.now() - (2 * 24 * 60 * 60 * 1000), autoAdded: false },
   { id: '5', name: 'Avocados', checked: false, category: 'Produce', aisle: 'Aisle A (Entrance)', frequencyCount: 9, intervalDays: 0, lastAdded: Date.now(), autoAdded: false },
   { id: '6', name: 'Paper Towels', checked: true, category: 'Household', aisle: 'Aisle 12', frequencyCount: 5, intervalDays: 30, lastAdded: Date.now() - (15 * 24 * 60 * 60 * 1000), autoAdded: false }
 ];
@@ -117,7 +126,12 @@ export default function App() {
       } else {
         const itemsList = [];
         snapshot.forEach((doc) => {
-          itemsList.push({ id: doc.id, ...doc.data() });
+          const data = doc.data();
+          itemsList.push({ 
+            id: doc.id, 
+            ...data,
+            intervalDays: snapInterval(data.intervalDays)
+          });
         });
         // Sort items by createdAt descending (newest on top) to match "As Added" order
         itemsList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -203,13 +217,13 @@ export default function App() {
 
     if (everyDaysMatch) {
       itemName = everyDaysMatch[1];
-      intervalDays = parseInt(everyDaysMatch[2], 10);
+      intervalDays = snapInterval(parseInt(everyDaysMatch[2], 10));
     } else if (weeklyMatch) {
       itemName = weeklyMatch[1];
       intervalDays = 7;
     } else if (dailyMatch) {
       itemName = dailyMatch[1];
-      intervalDays = 1;
+      intervalDays = snapInterval(1); // Maps to 3 (closest standard)
     } else if (simpleMatch) {
       itemName = simpleMatch[1];
       intervalDays = 0;
@@ -344,7 +358,7 @@ export default function App() {
       category,
       aisle,
       frequencyCount: isVoice ? 2 : 1,
-      intervalDays: days,
+      intervalDays: snapInterval(days),
       lastAdded: Date.now() + (timeShiftDays * 24 * 60 * 60 * 1000),
       autoAdded: isVoice,
       createdAt: Date.now()
