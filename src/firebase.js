@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
+import { getAI, getGenerativeModel, GoogleAIBackend } from "firebase/ai";
 
 // Web app's Firebase configuration loaded from environment variables
 const firebaseConfig = {
@@ -17,3 +18,14 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize Cloud Firestore and export it
 export const db = getFirestore(app);
+
+// Initialize the Gemini Developer API backend service
+export const ai = getAI(app, { backend: new GoogleAIBackend() });
+
+// Create and export the GenerativeModel instance with JSON mode enabled
+export const geminiModel = getGenerativeModel(ai, {
+  model: "gemini-flash-latest",
+  generationConfig: {
+    responseMimeType: "application/json"
+  }
+});

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { db } from './firebase';
+import { db, geminiModel } from './firebase';
 import { collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, writeBatch } from 'firebase/firestore';
 import { 
   Check, 
@@ -97,6 +97,7 @@ export default function App() {
   const [notifications, setNotifications] = useState([]);
   const [isSortingAI, setIsSortingAI] = useState(false);
   const [geminiStatus, setGeminiStatus] = useState('');
+  const [isGeminiParsing, setIsGeminiParsing] = useState(false);
   
   const [editingItem, setEditingItem] = useState(null);
   const [showWelcome, setShowWelcome] = useState(() => {
@@ -196,24 +197,15 @@ export default function App() {
     }
   }, []);
 
-  // Highly smart NLP Command Parser simulating Google Assistant / Gemini logic
-  const processVoiceCommand = (text) => {
-    setVoiceStatus('Gemini processing text: "' + text + '"...');
-    
-    // Normalize string
+  // Local regex-based command parser as fallback
+  const processVoiceCommandFallback = (text) => {
     const lower = text.toLowerCase().trim();
-    
-    // Look for phrases like: "add milk and cookies every 7 days" or "put milk on list" or "remind me to buy eggs weekly"
     let itemName = '';
     let intervalDays = 0;
 
-    // Pattern 1: "...every (X) days"
     const everyDaysMatch = lower.match(/(?:add|put|buy)\s+(.*?)\s+every\s+(\d+)\s+days?/i);
-    // Pattern 2: "...weekly"
     const weeklyMatch = lower.match(/(?:add|put|buy)\s+(.*?)\s+(?:weekly|every week)/i);
-    // Pattern 3: "...daily"
     const dailyMatch = lower.match(/(?:add|put|buy)\s+(.*?)\s+(?:daily|every day)/i);
-    // Pattern 4: Simple "add [item]"
     const simpleMatch = lower.match(/(?:add|put|buy)\s+(.*)/i);
 
     if (everyDaysMatch) {
@@ -224,30 +216,94 @@ export default function App() {
       intervalDays = 7;
     } else if (dailyMatch) {
       itemName = dailyMatch[1];
-      intervalDays = snapInterval(1); // Maps to 3 (closest standard)
+      intervalDays = snapInterval(1);
     } else if (simpleMatch) {
       itemName = simpleMatch[1];
       intervalDays = 0;
     } else {
-      // Just fallback to the entire phrase if no action word
       itemName = lower;
       intervalDays = 0;
     }
 
-    // Clean up connecting prepositions
     itemName = itemName.replace(/^(to my list|on my list|to the list|on the list|to buy|some)\s+/, '');
     itemName = itemName.replace(/\s+(on my list|to my list|on the list|to the list)$/, '');
 
     if (itemName) {
-      // Capitalize first letter
       const formattedName = itemName.charAt(0).toUpperCase() + itemName.slice(1);
       addItemDirectly(formattedName, intervalDays, true);
-      setVoiceStatus(`Successfully parsed: "${formattedName}" ${intervalDays > 0 ? `every ${intervalDays} days` : '(One-time)'}!`);
-      
-      // Add notification banner
-      addNotification(`Added via Gemini Voice: ${formattedName} ${intervalDays > 0 ? `(Recurrence: ${intervalDays}d)` : ''}`);
+      setVoiceStatus(`Fallback Parsed: "${formattedName}" ${intervalDays > 0 ? `every ${intervalDays} days` : '(One-time)'}!`);
+      addNotification(`Added via Fallback: ${formattedName} ${intervalDays > 0 ? `(Recurrence: ${intervalDays}d)` : ''}`);
     } else {
-      setVoiceStatus("Couldn't recognize dynamic command. Try: 'Add chocolate milk every 4 days'");
+      setVoiceStatus("Couldn't recognize fallback command.");
+    }
+  };
+
+  // High-performance voice command parser using Firebase AI Logic (Gemini Developer API)
+  const processVoiceCommand = async (text) => {
+    setIsGeminiParsing(true);
+    setVoiceStatus(`Gemini parsing voice command: "${text}"...`);
+
+    try {
+      const prompt = `You are a helpful grocery assistant. Analyze the user's voice command transcript to add one or more grocery items to a list.
+Extract:
+1. The capitalized name of the item (e.g. "Baguette", "Organic eggs").
+2. The category (MUST be one of: "Produce", "Dairy & Eggs", "Bakery", "Meat & Seafood", "Pantry", "Household", "Other").
+3. The French store location where the item is typically bought (MUST be one of: "Primeur", "Boulangerie", "Boucherie", "Épicerie", "Supermarché"). Guidelines:
+   - "Primeur" (Greengrocer): fruits, vegetables, salad, fresh herbs, raw eggs.
+   - "Boulangerie" (Bakery): baguettes, croissants, breads, pastries.
+   - "Boucherie" (Butcher): meats, chicken, beef, steaks, pork, fish, seafood.
+   - "Épicerie" (Dry goods/Pantry): pasta, rice, dry beans, spices, flour, sugar, coffee, tea, olive oil, canned foods.
+   - "Supermarché" (Supermarket): dairy (milk, cheese, butter, cream, yogurt), household cleaners, paper towels, toilet paper, soap, shampoo, laundry detergent.
+4. The recurrence interval in days. Choose the closest standard interval from: 0, 3, 7, 14, 30. Use 0 if the user doesn't specify a recurrence (e.g. one-time item), or snap phrases like:
+   - "daily" or "every day" or "every 3 days" -> 3
+   - "weekly" or "every week" or "every 7 days" -> 7
+   - "biweekly" or "every 2 weeks" or "every 14 days" -> 14
+   - "monthly" or "every month" or "every 30 days" or "every 4 weeks" -> 30
+
+If the command lists multiple items (e.g. "add eggs and bread"), parse them as separate items in the array.
+Respond ONLY with a JSON array of objects. Example:
+[
+  {"name": "Organic Milk", "category": "Dairy & Eggs", "location": "Supermarché", "intervalDays": 7},
+  {"name": "Baguette", "category": "Bakery", "location": "Boulangerie", "intervalDays": 0}
+]
+
+User Voice Command: "${text}"`;
+
+      const result = await geminiModel.generateContent(prompt);
+      const response = await result.response;
+      const responseText = response.text();
+      console.log("Gemini voice response:", responseText);
+
+      let itemsArray = [];
+      try {
+        itemsArray = JSON.parse(responseText);
+      } catch (jsonErr) {
+        // In case the response has backticks or markdown JSON wrapper block despite responseMimeType
+        const match = responseText.match(/\[\s*\{.*\}\s*\]/s);
+        if (match) {
+          itemsArray = JSON.parse(match[0]);
+        } else {
+          throw jsonErr;
+        }
+      }
+
+      if (Array.isArray(itemsArray) && itemsArray.length > 0) {
+        for (const item of itemsArray) {
+          const snapped = snapInterval(item.intervalDays);
+          await addItemDirectly(item.name, snapped, true, item.category, item.location);
+        }
+
+        const itemNamesStr = itemsArray.map(i => i.name).join(", ");
+        setVoiceStatus(`Successfully parsed: ${itemNamesStr}`);
+        addNotification(`Added via Gemini Voice: ${itemNamesStr}`);
+      } else {
+        throw new Error("Parsed result was not a non-empty array.");
+      }
+    } catch (err) {
+      console.warn("Gemini voice parser failed. Switching to regex fallback:", err);
+      processVoiceCommandFallback(text);
+    } finally {
+      setIsGeminiParsing(false);
     }
   };
 
@@ -339,17 +395,19 @@ export default function App() {
     processVoiceCommand(text);
   };
 
-  const addItemDirectly = async (name, days, isVoice = false) => {
-    // Determine category and location based on simple name-matching database lookup
-    let category = 'Other';
-    let location = 'Supermarché';
+  const addItemDirectly = async (name, days, isVoice = false, resolvedCategory = null, resolvedLocation = null) => {
+    // Determine category and location based on simple name-matching database lookup if not pre-resolved
+    let category = resolvedCategory || 'Other';
+    let location = resolvedLocation || 'Supermarché';
 
-    const lowerName = name.toLowerCase();
-    for (const key in CATEGORY_MAP) {
-      if (lowerName.includes(key)) {
-        category = CATEGORY_MAP[key].category;
-        location = CATEGORY_MAP[key].location;
-        break;
+    if (!resolvedCategory || !resolvedLocation) {
+      const lowerName = name.toLowerCase();
+      for (const key in CATEGORY_MAP) {
+        if (lowerName.includes(key)) {
+          if (!resolvedCategory) category = CATEGORY_MAP[key].category;
+          if (!resolvedLocation) location = CATEGORY_MAP[key].location;
+          break;
+        }
       }
     }
 
@@ -1042,17 +1100,28 @@ export default function App() {
             <div className="flex flex-col items-center justify-center p-6 bg-slate-50 rounded-2xl border border-slate-200 max-w-md mx-auto space-y-5 shadow-inner">
               <button
                 onClick={toggleVoice}
+                disabled={isGeminiParsing}
                 className={`w-20 h-20 rounded-full flex items-center justify-center text-white transition-all transform hover:scale-105 shadow-xl ${
-                  isVoiceActive 
-                    ? 'bg-red-500 animate-pulse ring-8 ring-red-100' 
-                    : 'bg-amber-500 hover:bg-amber-600 ring-8 ring-amber-100'
+                  isGeminiParsing
+                    ? 'bg-indigo-600 animate-pulse ring-8 ring-indigo-100 cursor-not-allowed'
+                    : isVoiceActive 
+                      ? 'bg-red-500 animate-pulse ring-8 ring-red-100' 
+                      : 'bg-amber-500 hover:bg-amber-600 ring-8 ring-amber-100'
                 }`}
               >
-                {isVoiceActive ? <MicOff className="w-8 h-8" /> : <Mic className="w-8 h-8" />}
+                {isGeminiParsing ? (
+                  <Sparkles className="w-8 h-8 text-amber-200 animate-spin" />
+                ) : isVoiceActive ? (
+                  <MicOff className="w-8 h-8" />
+                ) : (
+                  <Mic className="w-8 h-8" />
+                )}
               </button>
               
               <div className="text-center w-full">
-                <p className="font-bold text-sm text-slate-800">{isVoiceActive ? 'Listening...' : 'Microphone Ready'}</p>
+                <p className="font-bold text-sm text-slate-800">
+                  {isGeminiParsing ? 'Analyzing command...' : isVoiceActive ? 'Listening...' : 'Microphone Ready'}
+                </p>
                 <p className="text-xs text-slate-500 mt-1.5 px-2 leading-relaxed">{voiceStatus}</p>
               </div>
 
@@ -1073,13 +1142,14 @@ export default function App() {
                     type="text"
                     placeholder="e.g. Add paper towels every 5 days..."
                     id="manualVoiceInput"
+                    disabled={isGeminiParsing}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         handleManualVoiceSimulate(e.target.value);
                         e.target.value = '';
                       }
                     }}
-                    className="flex-1 px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-800 font-medium"
+                    className="flex-1 px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-800 font-medium disabled:opacity-50"
                   />
                   <button
                     onClick={() => {
@@ -1089,7 +1159,8 @@ export default function App() {
                         inputEl.value = '';
                       }
                     }}
-                    className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-bold transition duration-150 shadow-sm"
+                    disabled={isGeminiParsing}
+                    className="bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white px-4 py-2 rounded-xl text-xs font-bold transition duration-150 shadow-sm"
                   >
                     Simulate
                   </button>
@@ -1099,12 +1170,13 @@ export default function App() {
 
             {/* Quick Simulate Presets */}
             <div className="space-y-4 max-w-2xl mx-auto">
-              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest text-center">Simulated Preset Shortcuts (Click one to test)</h3>
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest text-center font-semibold">Simulated Preset Shortcuts (Click one to test)</h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <button
                   onClick={() => handleManualVoiceSimulate("Add organic milk every 7 days")}
-                  className="bg-white hover:bg-slate-50 p-3.5 rounded-xl border border-slate-200 hover:border-amber-400 text-left transition flex items-center gap-3"
+                  disabled={isGeminiParsing}
+                  className="bg-white hover:bg-slate-50 disabled:opacity-55 p-3.5 rounded-xl border border-slate-200 hover:border-amber-400 text-left transition flex items-center gap-3"
                 >
                   <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
                   <div>
@@ -1115,7 +1187,8 @@ export default function App() {
 
                 <button
                   onClick={() => handleManualVoiceSimulate("Put baby spinach leaves on my list every 3 days")}
-                  className="bg-white hover:bg-slate-50 p-3.5 rounded-xl border border-slate-200 hover:border-amber-400 text-left transition flex items-center gap-3"
+                  disabled={isGeminiParsing}
+                  className="bg-white hover:bg-slate-50 disabled:opacity-55 p-3.5 rounded-xl border border-slate-200 hover:border-amber-400 text-left transition flex items-center gap-3"
                 >
                   <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
                   <div>
@@ -1126,7 +1199,8 @@ export default function App() {
 
                 <button
                   onClick={() => handleManualVoiceSimulate("Hey Google add whole wheat bread to the list")}
-                  className="bg-white hover:bg-slate-50 p-3.5 rounded-xl border border-slate-200 hover:border-amber-400 text-left transition flex items-center gap-3"
+                  disabled={isGeminiParsing}
+                  className="bg-white hover:bg-slate-50 disabled:opacity-55 p-3.5 rounded-xl border border-slate-200 hover:border-amber-400 text-left transition flex items-center gap-3"
                 >
                   <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
                   <div>
@@ -1137,7 +1211,8 @@ export default function App() {
 
                 <button
                   onClick={() => handleManualVoiceSimulate("Remind me to buy paper towels weekly")}
-                  className="bg-white hover:bg-slate-50 p-3.5 rounded-xl border border-slate-200 hover:border-amber-400 text-left transition flex items-center gap-3"
+                  disabled={isGeminiParsing}
+                  className="bg-white hover:bg-slate-50 disabled:opacity-55 p-3.5 rounded-xl border border-slate-200 hover:border-amber-400 text-left transition flex items-center gap-3"
                 >
                   <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
                   <div>
