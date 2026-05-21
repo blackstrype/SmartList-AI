@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { db, geminiModel } from './firebase';
 import { collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, writeBatch } from 'firebase/firestore';
 import SandboxHeader from './components/SandboxHeader';
@@ -127,82 +127,71 @@ export default function App() {
     localStorage.setItem('smartlist_show_welcome', 'false');
   };
 
-  // Voice recognition setup
-  const recognitionRef = useRef(null);
-  const voiceLangRef = useRef(voiceLang);
-  const processVoiceCommandRef = useRef(processVoiceCommand);
 
-  // Keep refs synchronized
-  useEffect(() => {
-    voiceLangRef.current = voiceLang;
-  }, [voiceLang]);
 
-  useEffect(() => {
-    processVoiceCommandRef.current = processVoiceCommand;
-  });
-
-  useEffect(() => {
-    // Initialize Web Speech API if supported
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      const rec = new SpeechRecognition();
-      rec.continuous = false;
-      rec.interimResults = false;
-      rec.lang = voiceLangRef.current;
-
-      rec.onstart = () => {
-        setIsVoiceActive(true);
-        setVoiceStatus('Listening for "Add [Item] every [N] days"...');
-      };
-
-      rec.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        setVoiceResultText(transcript);
-        processVoiceCommandRef.current(transcript);
-      };
-
-      rec.onerror = (event) => {
-        console.error("Speech Recognition Error:", event);
-        const errType = event.error || "security-block";
-        let friendlyMsg;
-        
-        if (errType === 'not-allowed') {
-          friendlyMsg = "Microphone permission denied. Open http://localhost:5174/ in a browser tab to allow access.";
-        } else if (errType === 'no-speech') {
-          friendlyMsg = "No speech was detected. Click the microphone to try again.";
-        } else if (errType === 'audio-capture') {
-          friendlyMsg = "Microphone hardware capture failed. Check your connection or busy state.";
-        } else if (errType === 'network') {
-          friendlyMsg = "Speech recognition network communication failed. Note: Web Speech API (Chrome/Safari) requires connection to speech recognition cloud servers. Please check your connection, run the app directly at http://localhost:5174/, or use the interactive Text Simulator below!";
-        } else {
-          friendlyMsg = `Microphone access error (${errType}). If in a sandboxed preview, please open http://localhost:5174/ directly.`;
-        }
-        
-        setVoiceStatus(friendlyMsg);
-        setIsVoiceActive(false);
-      };
-
-      rec.onend = () => {
-        setIsVoiceActive(false);
-      };
-
-      recognitionRef.current = rec;
-    } else {
-      setTimeout(() => {
-        setVoiceStatus('Web Speech API not natively supported on this browser context. Try opening http://localhost:5174/ in a standard browser tab.');
-      }, 0);
-    }
+  const dismissNotification = useCallback((id) => {
+    setNotifications(prev => {
+      const exists = prev.find(n => n.id === id);
+      if (!exists || exists.exiting) return prev;
+      return prev.map(n => n.id === id ? { ...n, exiting: true } : n);
+    });
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    }, 300);
   }, []);
 
-  // Sync voiceLang selection to SpeechRecognition instance dynamically
-  useEffect(() => {
-    if (recognitionRef.current) {
-      recognitionRef.current.lang = voiceLang;
-      // Also update instructions status text
-      const friendlyName = voiceLang === 'en-US' ? 'English' : 'French';
-      setVoiceStatus(`Language switched to ${friendlyName}. Click mic to speak to Gemini...`);
+  const addNotification = useCallback((msg) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+    setNotifications(prev => [...prev, { id, msg, exiting: false }]);
+    setTimeout(() => {
+      dismissNotification(id);
+    }, 6000);
+  }, [dismissNotification]);
+
+  const addItemDirectly = async (name, days, isVoice = false, resolvedCategory = null, resolvedLocation = null) => {
+    // Determine category and location based on simple name-matching database lookup if not pre-resolved
+    let category = resolvedCategory || 'Other';
+    let location = resolvedLocation || 'Supermarché';
+
+    if (!resolvedCategory || !resolvedLocation) {
+      const lowerName = name.toLowerCase();
+      for (const key in CATEGORY_MAP) {
+        if (lowerName.includes(key)) {
+          if (!resolvedCategory) category = CATEGORY_MAP[key].category;
+          if (!resolvedLocation) location = CATEGORY_MAP[key].location;
+          break;
+        }
+      }
     }
-  }, [voiceLang]);
+
+    const newItem = {
+      name,
+      checked: false,
+      category,
+      location,
+      frequencyCount: isVoice ? 2 : 1,
+      intervalDays: snapInterval(days),
+      lastAdded: Date.now() + (timeShiftDays * 24 * 60 * 60 * 1000),
+      autoAdded: isVoice,
+      createdAt: Date.now()
+    };
+
+    try {
+      await addDoc(collection(db, "items"), newItem);
+    } catch (err) {
+      console.error("Error adding document to Firestore: ", err);
+      addNotification("Error adding item to database.");
+    }
+  };
+
+  const handleAddSubmit = (e) => {
+    e.preventDefault();
+    if (!newItemName.trim()) return;
+    addItemDirectly(newItemName.trim(), newItemRecurrence);
+    addNotification(`Added: ${newItemName.trim()}`);
+    setNewItemName('');
+    setNewItemRecurrence(0);
+  };
 
   // Local regex-based command parser as fallback
   const processVoiceCommandFallback = (text) => {
@@ -314,6 +303,83 @@ User Voice Command: "${text}" (The command is transcribed using speech recogniti
     }
   };
 
+  // Voice recognition setup
+  const recognitionRef = useRef(null);
+  const voiceLangRef = useRef(voiceLang);
+  const processVoiceCommandRef = useRef(null);
+
+  // Keep refs synchronized
+  useEffect(() => {
+    voiceLangRef.current = voiceLang;
+  }, [voiceLang]);
+
+  useEffect(() => {
+    processVoiceCommandRef.current = processVoiceCommand;
+  });
+
+  useEffect(() => {
+    // Initialize Web Speech API if supported
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const rec = new SpeechRecognition();
+      rec.continuous = false;
+      rec.interimResults = false;
+      rec.lang = voiceLangRef.current;
+
+      rec.onstart = () => {
+        setIsVoiceActive(true);
+        setVoiceStatus('Listening for "Add [Item] every [N] days"...');
+      };
+
+      rec.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        setVoiceResultText(transcript);
+        processVoiceCommandRef.current(transcript);
+      };
+
+      rec.onerror = (event) => {
+        console.error("Speech Recognition Error:", event);
+        const errType = event.error || "security-block";
+        let friendlyMsg;
+        
+        if (errType === 'not-allowed') {
+          friendlyMsg = "Microphone permission denied. Open http://localhost:5174/ in a browser tab to allow access.";
+        } else if (errType === 'no-speech') {
+          friendlyMsg = "No speech was detected. Click the microphone to try again.";
+        } else if (errType === 'audio-capture') {
+          friendlyMsg = "Microphone hardware capture failed. Check your connection or busy state.";
+        } else if (errType === 'network') {
+          friendlyMsg = "Speech recognition network communication failed. Note: Web Speech API (Chrome/Safari) requires connection to speech recognition cloud servers. Please check your connection, run the app directly at http://localhost:5174/, or use the interactive Text Simulator below!";
+        } else {
+          friendlyMsg = `Microphone access error (${errType}). If in a sandboxed preview, please open http://localhost:5174/ directly.`;
+        }
+        
+        setVoiceStatus(friendlyMsg);
+        setIsVoiceActive(false);
+      };
+
+      rec.onend = () => {
+        setIsVoiceActive(false);
+      };
+
+      recognitionRef.current = rec;
+    } else {
+      setTimeout(() => {
+        setVoiceStatus('Web Speech API not natively supported on this browser context. Try opening http://localhost:5174/ in a standard browser tab.');
+      }, 0);
+    }
+  }, []);
+
+  // Sync voiceLang selection to SpeechRecognition instance dynamically
+  useEffect(() => {
+    if (recognitionRef.current) {
+      recognitionRef.current.lang = voiceLang;
+      // Also update instructions status text
+      const friendlyName = voiceLang === 'en-US' ? 'English' : 'French';
+      setVoiceStatus(`Language switched to ${friendlyName}. Click mic to speak to Gemini...`);
+    }
+  }, [voiceLang]);
+
   // Simulates passage of time to trigger automatic recurrence updates
   const handleTimeTravel = async (days) => {
     const newShift = timeShiftDays + days;
@@ -353,25 +419,6 @@ User Voice Command: "${text}" (The command is transcribed using speech recogniti
     }
   };
 
-  const addNotification = (msg) => {
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
-    setNotifications(prev => [...prev, { id, msg, exiting: false }]);
-    setTimeout(() => {
-      dismissNotification(id);
-    }, 6000);
-  };
-
-  const dismissNotification = (id) => {
-    setNotifications(prev => {
-      const exists = prev.find(n => n.id === id);
-      if (!exists || exists.exiting) return prev;
-      return prev.map(n => n.id === id ? { ...n, exiting: true } : n);
-    });
-    setTimeout(() => {
-      setNotifications(prev => prev.filter(n => n.id !== id));
-    }, 300);
-  };
-
   const toggleVoice = () => {
     if (isVoiceActive) {
       try {
@@ -400,51 +447,6 @@ User Voice Command: "${text}" (The command is transcribed using speech recogniti
     if (!text || !text.trim()) return;
     setVoiceResultText(text);
     processVoiceCommand(text);
-  };
-
-  const addItemDirectly = async (name, days, isVoice = false, resolvedCategory = null, resolvedLocation = null) => {
-    // Determine category and location based on simple name-matching database lookup if not pre-resolved
-    let category = resolvedCategory || 'Other';
-    let location = resolvedLocation || 'Supermarché';
-
-    if (!resolvedCategory || !resolvedLocation) {
-      const lowerName = name.toLowerCase();
-      for (const key in CATEGORY_MAP) {
-        if (lowerName.includes(key)) {
-          if (!resolvedCategory) category = CATEGORY_MAP[key].category;
-          if (!resolvedLocation) location = CATEGORY_MAP[key].location;
-          break;
-        }
-      }
-    }
-
-    const newItem = {
-      name,
-      checked: false,
-      category,
-      location,
-      frequencyCount: isVoice ? 2 : 1,
-      intervalDays: snapInterval(days),
-      lastAdded: Date.now() + (timeShiftDays * 24 * 60 * 60 * 1000),
-      autoAdded: isVoice,
-      createdAt: Date.now()
-    };
-
-    try {
-      await addDoc(collection(db, "items"), newItem);
-    } catch (err) {
-      console.error("Error adding document to Firestore: ", err);
-      addNotification("Error adding item to database.");
-    }
-  };
-
-  const handleAddSubmit = (e) => {
-    e.preventDefault();
-    if (!newItemName.trim()) return;
-    addItemDirectly(newItemName.trim(), newItemRecurrence);
-    addNotification(`Added: ${newItemName.trim()}`);
-    setNewItemName('');
-    setNewItemRecurrence(0);
   };
 
   const toggleItem = async (id) => {
