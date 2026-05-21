@@ -1,0 +1,15 @@
+{
+  "name": "smartlist-mcp-server",
+  "version": "1.0.0",
+  "description": "Model Context Protocol server for SmartList AI grocery list integration",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.1",
+    "dotenv": "^16.4.5",
+    "firebase": "^11.3.1"
+  }
+}
