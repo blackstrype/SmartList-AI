@@ -516,8 +516,12 @@ User Voice Command: "${text}" (The command is transcribed using speech recogniti
 
   // Sort logic mapping
   const getSortedItems = () => {
-    let activeItems = items.filter(i => !i.checked);
-    let checkedItems = items.filter(i => i.checked);
+    let activeItems = [];
+    let checkedItems = [];
+    items.forEach(i => {
+      if (i.checked) checkedItems.push(i);
+      else activeItems.push(i);
+    });
 
     const sortFn = (a, b) => {
       if (sortMethod === 'alphabetical') {
