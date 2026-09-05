@@ -88,7 +88,6 @@ export default function App() {
     const colRef = collection(db, "items");
     const unsubscribe = onSnapshot(colRef, async (snapshot) => {
       if (snapshot.empty) {
-        console.log("Firestore collection 'items' is empty. Seeding INITIAL_ITEMS...");
         const batch = writeBatch(db);
         INITIAL_ITEMS.forEach((item) => {
           const { id, ...itemData } = item;
