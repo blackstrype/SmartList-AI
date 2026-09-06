@@ -282,10 +282,10 @@ User Voice Command: "${text}" (The command is transcribed using speech recogniti
       }
 
       if (Array.isArray(itemsArray) && itemsArray.length > 0) {
-        for (const item of itemsArray) {
+        await Promise.all(itemsArray.map(async (item) => {
           const snapped = snapInterval(item.intervalDays);
           await addItemDirectly(item.name, snapped, true, item.category, item.location);
-        }
+        }));
 
         const itemNamesStr = itemsArray.map(i => i.name).join(", ");
         setVoiceStatus(`Successfully parsed: ${itemNamesStr}`);
