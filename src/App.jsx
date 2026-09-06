@@ -268,7 +268,6 @@ User Voice Command: "${text}" (The command is transcribed using speech recogniti
       const result = await geminiModel.generateContent(prompt);
       const response = await result.response;
       const responseText = response.text();
-      console.log("Gemini voice response:", responseText);
 
       let itemsArray = [];
       try {
