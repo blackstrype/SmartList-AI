@@ -67,6 +67,8 @@ const CATEGORY_MAP = {
   coffee: { category: "Pantry", location: "Épicerie" }
 };
 
+const CATEGORY_ENTRIES = Object.entries(CATEGORY_MAP);
+
 // Helper to snap intervals to standard periods [0, 3, 7, 14, 30]
 const snapInterval = (days) => {
   if (days === undefined || days === null || days <= 0) return 0;
@@ -235,10 +237,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // Auto-match category and location if not explicitly provided
         if (!args.category || !args.location) {
           const lowerName = itemName.toLowerCase();
-          for (const key in CATEGORY_MAP) {
-            if (lowerName.includes(key)) {
-              if (!args.category) category = CATEGORY_MAP[key].category;
-              if (!args.location) location = CATEGORY_MAP[key].location;
+          for (let i = 0; i < CATEGORY_ENTRIES.length; i++) {
+            const entry = CATEGORY_ENTRIES[i];
+            if (lowerName.includes(entry[0])) {
+              if (!args.category) category = entry[1].category;
+              if (!args.location) location = entry[1].location;
               break;
             }
           }
