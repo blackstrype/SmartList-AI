@@ -26,6 +26,72 @@ describe('App', () => {
     vi.clearAllMocks();
   });
 
+  it('uses AI to categorize unknown items and caches the result', async () => {
+    // Clear localStorage before test
+    localStorage.clear();
+
+    // Mock onSnapshot to immediately return empty list
+    firestore.onSnapshot.mockImplementation((colRef, callback) => {
+      callback({
+        empty: false, // Prevents seeding initial items
+        forEach: () => {},
+      });
+      return vi.fn(); // Return unsubscribe function
+    });
+
+    const { geminiModel } = await import('../firebase');
+
+    // Mock the AI response for a new unknown item
+    geminiModel.generateContent.mockResolvedValueOnce({
+      response: {
+        text: () => JSON.stringify({ category: "Produce", location: "Primeur" })
+      }
+    });
+
+    render(<App />);
+
+    // Enter a new unknown item
+    const input = screen.getByPlaceholderText(/e.g. Almond Milk/i);
+    fireEvent.change(input, { target: { value: 'Dragonfruit' } });
+
+    // Submit the form
+    const addButton = screen.getByRole('button', { name: /Add to Shopping List/i });
+    fireEvent.click(addButton);
+
+    // Wait for the AI categorization to complete and addDoc to be called
+    await waitFor(() => {
+      expect(geminiModel.generateContent).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => {
+      expect(firestore.addDoc).toHaveBeenCalledTimes(1);
+    });
+
+    // Check that it was categorized using the AI response
+    const addedItemData = firestore.addDoc.mock.calls[0][1];
+    expect(addedItemData.name).toBe('Dragonfruit');
+    expect(addedItemData.category).toBe('Produce');
+    expect(addedItemData.location).toBe('Primeur');
+
+    // Add the same item again
+    fireEvent.change(input, { target: { value: 'dragonfruit' } });
+    fireEvent.click(addButton);
+
+    // Wait for the second addDoc
+    await waitFor(() => {
+      expect(firestore.addDoc).toHaveBeenCalledTimes(2);
+    });
+
+    // Verify AI was NOT called again because it was cached
+    expect(geminiModel.generateContent).toHaveBeenCalledTimes(1);
+
+    // Check that the cached categorization was used
+    const addedItemData2 = firestore.addDoc.mock.calls[1][1];
+    expect(addedItemData2.name).toBe('dragonfruit');
+    expect(addedItemData2.category).toBe('Produce');
+    expect(addedItemData2.location).toBe('Primeur');
+  });
+
   it('shows an error notification when deleting an item fails', async () => {
     // Mock onSnapshot to immediately return some initial items
     firestore.onSnapshot.mockImplementation((colRef, callback) => {

@@ -31,7 +31,7 @@ const INITIAL_ITEMS = [
 
 
 // Helper to map dynamic terms to standard grocery categories
-const CATEGORY_MAP = {
+const INITIAL_CATEGORY_MAP = {
   milk: { category: 'Dairy & Eggs', location: 'Supermarché' },
   cheese: { category: 'Dairy & Eggs', location: 'Supermarché' },
   egg: { category: 'Dairy & Eggs', location: 'Primeur' },
@@ -59,6 +59,32 @@ const CATEGORY_MAP = {
   rice: { category: 'Pantry', location: 'Épicerie' },
   cereal: { category: 'Pantry', location: 'Épicerie' },
   coffee: { category: 'Pantry', location: 'Épicerie' }
+};
+
+const getCategoryMap = () => {
+  const cached = localStorage.getItem('smartlist_category_map');
+  if (cached) {
+    try {
+      return { ...INITIAL_CATEGORY_MAP, ...JSON.parse(cached) };
+    } catch (e) {
+      console.error("Failed to parse cached category map", e);
+    }
+  }
+  return { ...INITIAL_CATEGORY_MAP };
+};
+
+const saveToCategoryMap = (key, value) => {
+  const cached = localStorage.getItem('smartlist_category_map');
+  let map = {};
+  if (cached) {
+    try {
+      map = JSON.parse(cached);
+    } catch (e) {
+      console.error("Failed to parse cached category map", e);
+    }
+  }
+  map[key] = value;
+  localStorage.setItem('smartlist_category_map', JSON.stringify(map));
 };
 
 export default function App() {
@@ -149,18 +175,56 @@ export default function App() {
 
   const addItemDirectly = async (name, days, isVoice = false, resolvedCategory = null, resolvedLocation = null) => {
     // Determine category and location based on simple name-matching database lookup if not pre-resolved
-    let category = resolvedCategory || 'Other';
-    let location = resolvedLocation || 'Supermarché';
+    let category = resolvedCategory;
+    let location = resolvedLocation;
 
     if (!resolvedCategory || !resolvedLocation) {
       const lowerName = name.toLowerCase();
-      for (const key in CATEGORY_MAP) {
+      const currentMap = getCategoryMap();
+      let matched = false;
+      for (const key in currentMap) {
         if (lowerName.includes(key)) {
-          if (!resolvedCategory) category = CATEGORY_MAP[key].category;
-          if (!resolvedLocation) location = CATEGORY_MAP[key].location;
+          if (!resolvedCategory) category = currentMap[key].category;
+          if (!resolvedLocation) location = currentMap[key].location;
+          matched = true;
           break;
         }
       }
+
+      if (!matched) {
+        // AI Categorization for unknown items
+        try {
+          const prompt = `Categorize the grocery item: "${name}".
+          Respond ONLY with a JSON object containing "category" and "location".
+          "category" MUST be one of: "Produce", "Dairy & Eggs", "Bakery", "Meat & Seafood", "Pantry", "Household", "Other".
+          "location" MUST be one of: "Primeur", "Boulangerie", "Boucherie", "Épicerie", "Supermarché".`;
+
+          const result = await geminiModel.generateContent(prompt);
+          const responseText = result.response.text();
+          let aiResult;
+          try {
+            aiResult = JSON.parse(responseText);
+          } catch {
+            const match = responseText.match(/\{.*\}/s);
+            if (match) {
+              aiResult = JSON.parse(match[0]);
+            }
+          }
+
+          if (aiResult && aiResult.category && aiResult.location) {
+            category = aiResult.category;
+            location = aiResult.location;
+            // Cache the result to save future token usage
+            saveToCategoryMap(lowerName, { category, location });
+          }
+        } catch (err) {
+          console.warn("AI Categorization failed, defaulting.", err);
+        }
+      }
+
+      // Fallbacks in case AI failed or matched logic didn't fully resolve
+      if (!category) category = 'Other';
+      if (!location) location = 'Supermarché';
     }
 
     const newItem = {
