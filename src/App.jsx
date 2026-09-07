@@ -181,17 +181,15 @@ export default function App() {
     if (!resolvedCategory || !resolvedLocation) {
       const lowerName = name.toLowerCase();
       const currentMap = getCategoryMap();
-      let matched = false;
-      for (const key in currentMap) {
-        if (lowerName.includes(key)) {
-          if (!resolvedCategory) category = currentMap[key].category;
-          if (!resolvedLocation) location = currentMap[key].location;
-          matched = true;
-          break;
-        }
+
+      const matchedKey = Object.keys(currentMap).find(key => lowerName.includes(key));
+
+      if (matchedKey) {
+        if (!resolvedCategory) category = currentMap[matchedKey].category;
+        if (!resolvedLocation) location = currentMap[matchedKey].location;
       }
 
-      if (!matched) {
+      if (!matchedKey) {
         // AI Categorization for unknown items
         try {
           const prompt = `Categorize the grocery item: "${name}".
