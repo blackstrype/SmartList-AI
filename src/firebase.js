@@ -1,7 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAI, getGenerativeModel, GoogleAIBackend } from "firebase/ai";
-
+import { getAuth, GoogleAuthProvider } from "firebase/auth";
 // Web app's Firebase configuration loaded from environment variables
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -29,3 +29,9 @@ export const geminiModel = getGenerativeModel(ai, {
     responseMimeType: "application/json"
   }
 });
+
+// Initialize Authentication
+export const auth = getAuth(app);
+
+// Export Auth Providers
+export const googleProvider = new GoogleAuthProvider();

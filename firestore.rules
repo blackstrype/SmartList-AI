@@ -23,9 +23,11 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /items/{itemId} {
-      // Currently in prototype mode (no authentication is implemented yet).
-      // Allows public access for prototype testing.
-      allow read, write: if true;
+      // Requires the user to be authenticated and matching the document's userId
+      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      
+      // On creation, the new document must have the correct userId assigned
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
     }
   }
 }

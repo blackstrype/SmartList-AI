@@ -1,8 +1,10 @@
-import { ShoppingCart, List, Mic, History } from 'lucide-react';
+import { ShoppingCart, List, Mic, History, LogOut } from 'lucide-react';
+import { auth } from '../firebase';
+import { signOut } from 'firebase/auth';
 
-export default function Navbar({ activeTab, setActiveTab }) {
+export default function Navbar({ activeTab, setActiveTab, user }) {
   return (
-    <nav className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-30 shadow-sm">
+    <nav className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-30 shadow-sm flex-wrap gap-4">
       <div className="flex items-center gap-3">
         <div className="bg-amber-500 text-white p-2.5 rounded-xl shadow-md shadow-amber-500/20 flex items-center justify-center">
           <ShoppingCart className="w-6 h-6" />
@@ -39,6 +41,30 @@ export default function Navbar({ activeTab, setActiveTab }) {
           <span className="hidden sm:inline">History & Frequency</span>
         </button>
       </div>
+
+      {user && (
+        <div className="flex items-center gap-4 border-l border-slate-200 pl-4">
+          <div className="flex items-center gap-2">
+            {user.photoURL ? (
+              <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full shadow-sm" />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
+                {user.email ? user.email[0].toUpperCase() : 'U'}
+              </div>
+            )}
+            <div className="hidden md:block">
+              <p className="text-sm font-medium text-slate-700">{user.displayName || 'User'}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => signOut(auth)}
+            className="text-slate-500 hover:text-red-600 transition p-2 rounded-lg hover:bg-red-50"
+            title="Sign Out"
+          >
+            <LogOut className="w-5 h-5" />
+          </button>
+        </div>
+      )}
     </nav>
   );
 }

@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { db, geminiModel } from './firebase';
-import { collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, writeBatch } from 'firebase/firestore';
+import { db, geminiModel, auth } from './firebase';
+import { collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, writeBatch, query, where } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
+import Login from './components/Login';
 import SandboxHeader from './components/SandboxHeader';
 import NotificationCenter from './components/NotificationCenter';
 import Navbar from './components/Navbar';
@@ -88,7 +90,17 @@ const saveToCategoryMap = (key, value) => {
 };
 
 export default function App() {
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [items, setItems] = useState([]);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
   const [newItemName, setNewItemName] = useState('');
   const [newItemRecurrence, setNewItemRecurrence] = useState(0); // 0 = no recurrence
   const [activeTab, setActiveTab] = useState('list'); // 'list' | 'analytics' | 'voice' | 'settings'
@@ -111,15 +123,22 @@ export default function App() {
 
   // Sync with Firestore and seed INITIAL_ITEMS if empty
   useEffect(() => {
+    if (!user) {
+      setItems([]);
+      return;
+    }
     const colRef = collection(db, "items");
-    const unsubscribe = onSnapshot(colRef, async (snapshot) => {
+    const q = query(colRef, where("userId", "==", user.uid));
+
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
       if (snapshot.empty) {
         const batch = writeBatch(db);
         INITIAL_ITEMS.forEach((item) => {
           const { id, ...itemData } = item;
           // Add a createdAt timestamp for chronological ordering
           itemData.createdAt = Date.now() - (6 - parseInt(id)) * 1000;
-          const docRef = doc(db, "items", id);
+          itemData.userId = user.uid;
+          const docRef = doc(collection(db, "items")); // Auto ID to prevent conflicts across users
           batch.set(docRef, itemData);
         });
         try {
@@ -145,7 +164,7 @@ export default function App() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   const handleDismissWelcome = () => {
     setShowWelcome(false);
@@ -234,7 +253,8 @@ export default function App() {
       intervalDays: snapInterval(days),
       lastAdded: Date.now() + (timeShiftDays * 24 * 60 * 60 * 1000),
       autoAdded: isVoice,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      userId: user.uid
     };
 
     try {
@@ -612,12 +632,25 @@ User Voice Command: "${text}" (The command is transcribed using speech recogniti
 
   const sortedLists = getSortedItems();
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Login />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
       <SandboxHeader 
         timeShiftDays={timeShiftDays} 
         handleTimeTravel={handleTimeTravel} 
         setTimeShiftDays={setTimeShiftDays} 
+        user={user}
       />
 
       <NotificationCenter 
@@ -627,7 +660,8 @@ User Voice Command: "${text}" (The command is transcribed using speech recogniti
 
       <Navbar 
         activeTab={activeTab} 
-        setActiveTab={setActiveTab} 
+        setActiveTab={setActiveTab}
+        user={user} 
       />
 
       <main className="flex-1 max-w-5xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 gap-6">

@@ -15,5 +15,15 @@
         "destination": "/index.html"
       }
     ]
+  },
+  "auth": {
+    "authorizedDomains": ["localhost", "smartlist-ai-fc1d3.firebaseapp.com", "smartlist-ai-fc1d3.web.app"],
+    "providers": {
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "SmartList AI",
+        "supportEmail": "noreply@smartlist-ai-fc1d3.firebaseapp.com"
+      }
+    }
   }
 }
