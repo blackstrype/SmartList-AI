@@ -92,6 +92,60 @@ describe('App', () => {
     expect(addedItemData2.location).toBe('Primeur');
   });
 
+  it('shows an error notification when toggling an item fails', async () => {
+    // Mock onSnapshot to immediately return some initial items
+    firestore.onSnapshot.mockImplementation((colRef, callback) => {
+      callback({
+        empty: false,
+        forEach: (fn) => {
+          fn({
+            id: '1',
+            data: () => ({
+              name: 'Test Toggle Item',
+              checked: false,
+              category: 'Other',
+              location: 'Supermarché',
+              intervalDays: 0,
+              createdAt: Date.now(),
+            }),
+          });
+        },
+      });
+      return vi.fn(); // Return unsubscribe function
+    });
+
+    // Make updateDoc throw an error
+    const mockError = new Error('Mock update failure');
+    firestore.updateDoc.mockRejectedValueOnce(mockError);
+
+    // Spy on console.error
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    render(<App />);
+
+    // Wait for the item to appear in the list
+    await waitFor(() => {
+      expect(screen.getByText('Test Toggle Item')).toBeInTheDocument();
+    });
+
+    // Find the toggle button (checkbox-like button)
+    // Looking at ActiveListTab.jsx, the button has title="Check off item"
+    const toggleButton = screen.getByTitle('Check off item');
+
+    // Click the toggle button
+    fireEvent.click(toggleButton);
+
+    // Wait for the error notification to appear
+    await waitFor(() => {
+      expect(screen.getByText('Error updating item status.')).toBeInTheDocument();
+    });
+
+    // Verify console.error was called with the expected arguments
+    expect(consoleSpy).toHaveBeenCalledWith('Error updating document in Firestore: ', mockError);
+
+    consoleSpy.mockRestore();
+  });
+
   it('shows an error notification when deleting an item fails', async () => {
     // Mock onSnapshot to immediately return some initial items
     firestore.onSnapshot.mockImplementation((colRef, callback) => {
@@ -130,10 +184,11 @@ describe('App', () => {
 
     // Find the delete button
     // The delete button is an icon with the title "Delete from list"
-    const deleteButton = screen.getByTitle('Delete from list');
+    // For delete, we may have multiple buttons so we use getAllByTitle
+    const deleteButtons = screen.getAllByTitle('Delete from list');
 
-    // Click the delete button
-    fireEvent.click(deleteButton);
+    // Click the delete button on the first item (should be Test Item)
+    fireEvent.click(deleteButtons[0]);
 
     // Wait for the error notification to appear
     await waitFor(() => {
