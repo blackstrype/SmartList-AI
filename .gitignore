@@ -25,3 +25,6 @@ dist-ssr
 
 # Firebase
 .env.local
+
+# Antigravity Agents
+.agents/
