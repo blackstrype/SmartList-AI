@@ -1,11 +1,14 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import App from '../App';
+import { getCurrentAppTime } from '../utils/timeProvider';
 import * as firestore from 'firebase/firestore';
 
 // Mock Firebase
 vi.mock('../firebase', () => ({
   db: {},
+  auth: {},
+
   geminiModel: {
     generateContent: vi.fn(),
   },
@@ -19,6 +22,15 @@ vi.mock('firebase/firestore', () => ({
   deleteDoc: vi.fn(),
   onSnapshot: vi.fn(),
   writeBatch: vi.fn(),
+  query: vi.fn(),
+  where: vi.fn(),
+}));
+
+vi.mock('firebase/auth', () => ({
+  onAuthStateChanged: vi.fn((auth, cb) => {
+    cb({ uid: 'test-user-id' });
+    return vi.fn();
+  })
 }));
 
 describe('App', () => {
@@ -106,7 +118,7 @@ describe('App', () => {
               category: 'Other',
               location: 'Supermarché',
               intervalDays: 0,
-              createdAt: Date.now(),
+              createdAt: getCurrentAppTime(),
             }),
           });
         },
@@ -160,7 +172,7 @@ describe('App', () => {
               category: 'Other',
               location: 'Supermarché',
               intervalDays: 0,
-              createdAt: Date.now(),
+              createdAt: getCurrentAppTime(),
             }),
           });
         },

@@ -11,6 +11,7 @@ import ActiveListTab from './components/ActiveListTab';
 import VoiceSandboxTab from './components/VoiceSandboxTab';
 import AnalyticsTab from './components/AnalyticsTab';
 import Footer from './components/Footer';
+import { getCurrentAppTime, setGlobalTimeShift, getGlobalTimeShift } from './utils/timeProvider';
 
 // Helper to snap intervals to standard periods [0, 3, 7, 14, 30]
 const snapInterval = (days) => {
@@ -23,12 +24,12 @@ const snapInterval = (days) => {
 
 // Pre-configured typical items for the simulation
 const INITIAL_ITEMS = [
-  { id: '1', name: 'Organic Milk 2%', checked: false, category: 'Dairy & Eggs', location: 'Supermarché', frequencyCount: 14, intervalDays: 7, lastAdded: Date.now() - (6 * 24 * 60 * 60 * 1000), autoAdded: false },
-  { id: '2', name: 'Whole Wheat Bread', checked: false, category: 'Bakery', location: 'Boulangerie', frequencyCount: 12, intervalDays: 7, lastAdded: Date.now() - (4 * 24 * 60 * 60 * 1000), autoAdded: false },
-  { id: '3', name: 'Fresh Bananas', checked: false, category: 'Produce', location: 'Primeur', frequencyCount: 18, intervalDays: 0, lastAdded: Date.now() - (3 * 24 * 60 * 60 * 1000), autoAdded: false },
-  { id: '4', name: 'Greek Yogurt (Vanilla)', checked: true, category: 'Dairy & Eggs', location: 'Supermarché', frequencyCount: 8, intervalDays: 7, lastAdded: Date.now() - (2 * 24 * 60 * 60 * 1000), autoAdded: false },
-  { id: '5', name: 'Avocados', checked: false, category: 'Produce', location: 'Primeur', frequencyCount: 9, intervalDays: 0, lastAdded: Date.now(), autoAdded: false },
-  { id: '6', name: 'Paper Towels', checked: true, category: 'Household', location: 'Supermarché', frequencyCount: 5, intervalDays: 30, lastAdded: Date.now() - (15 * 24 * 60 * 60 * 1000), autoAdded: false }
+  { id: '1', name: 'Organic Milk 2%', checked: false, category: 'Dairy & Eggs', location: 'Supermarché', frequencyCount: 14, intervalDays: 7, lastAdded: getCurrentAppTime() - (6 * 24 * 60 * 60 * 1000), autoAdded: false },
+  { id: '2', name: 'Whole Wheat Bread', checked: false, category: 'Bakery', location: 'Boulangerie', frequencyCount: 12, intervalDays: 7, lastAdded: getCurrentAppTime() - (4 * 24 * 60 * 60 * 1000), autoAdded: false },
+  { id: '3', name: 'Fresh Bananas', checked: false, category: 'Produce', location: 'Primeur', frequencyCount: 18, intervalDays: 0, lastAdded: getCurrentAppTime() - (3 * 24 * 60 * 60 * 1000), autoAdded: false },
+  { id: '4', name: 'Greek Yogurt (Vanilla)', checked: true, category: 'Dairy & Eggs', location: 'Supermarché', frequencyCount: 8, intervalDays: 7, lastAdded: getCurrentAppTime() - (2 * 24 * 60 * 60 * 1000), autoAdded: false },
+  { id: '5', name: 'Avocados', checked: false, category: 'Produce', location: 'Primeur', frequencyCount: 9, intervalDays: 0, lastAdded: getCurrentAppTime(), autoAdded: false },
+  { id: '6', name: 'Paper Towels', checked: true, category: 'Household', location: 'Supermarché', frequencyCount: 5, intervalDays: 30, lastAdded: getCurrentAppTime() - (15 * 24 * 60 * 60 * 1000), autoAdded: false }
 ];
 
 
@@ -109,7 +110,7 @@ export default function App() {
   const [voiceResultText, setVoiceResultText] = useState('');
   const [voiceStatus, setVoiceStatus] = useState('Click mic to speak to Gemini...');
   const [voiceLang, setVoiceLang] = useState('en-US'); // 'en-US' | 'fr-FR'
-  const [timeShiftDays, setTimeShiftDays] = useState(0); // Simulated time engine days elapsed
+  const [uiTimeShift, setUiTimeShift] = useState(0); // Simulated time engine days elapsed (UI only)
   const [notifications, setNotifications] = useState([]);
   const [isSortingAI, setIsSortingAI] = useState(false);
   const [geminiStatus, setGeminiStatus] = useState('');
@@ -136,7 +137,7 @@ export default function App() {
         INITIAL_ITEMS.forEach((item) => {
           const { id, ...itemData } = item;
           // Add a createdAt timestamp for chronological ordering
-          itemData.createdAt = Date.now() - (6 - parseInt(id)) * 1000;
+          itemData.createdAt = getCurrentAppTime() - (6 - parseInt(id)) * 1000;
           itemData.userId = user.uid;
           const docRef = doc(collection(db, "items")); // Auto ID to prevent conflicts across users
           batch.set(docRef, itemData);
@@ -185,7 +186,7 @@ export default function App() {
   }, []);
 
   const addNotification = useCallback((msg) => {
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+    const id = `${getCurrentAppTime()}-${Math.random().toString(36).slice(2, 11)}`;
     setNotifications(prev => [...prev, { id, msg, exiting: false }]);
     setTimeout(() => {
       dismissNotification(id);
@@ -251,9 +252,9 @@ export default function App() {
       location,
       frequencyCount: isVoice ? 2 : 1,
       intervalDays: snapInterval(days),
-      lastAdded: Date.now() + (timeShiftDays * 24 * 60 * 60 * 1000),
+      lastAdded: getCurrentAppTime(),
       autoAdded: isVoice,
-      createdAt: Date.now(),
+      createdAt: getCurrentAppTime(),
       userId: user.uid
     };
 
@@ -462,15 +463,16 @@ User Voice Command: "${text}" (The command is transcribed using speech recogniti
 
   // Simulates passage of time to trigger automatic recurrence updates
   const handleTimeTravel = async (days) => {
-    const newShift = timeShiftDays + days;
-    setTimeShiftDays(newShift);
+    const current = getGlobalTimeShift();
+    setGlobalTimeShift(current + days);
+    setUiTimeShift(getGlobalTimeShift());
 
     const batch = writeBatch(db);
     let updatedCount = 0;
 
     items.forEach(item => {
       if (item.intervalDays > 0) {
-        const msSinceLast = Date.now() + (newShift * 24 * 60 * 60 * 1000) - item.lastAdded;
+        const msSinceLast = getCurrentAppTime() - item.lastAdded;
         const daysSinceLast = msSinceLast / (24 * 60 * 60 * 1000);
 
         if (daysSinceLast >= item.intervalDays && item.checked) {
@@ -478,7 +480,7 @@ User Voice Command: "${text}" (The command is transcribed using speech recogniti
           const docRef = doc(db, "items", item.id);
           batch.update(docRef, {
             checked: false, // Automatically put back in action
-            lastAdded: Date.now() + (newShift * 24 * 60 * 60 * 1000), // Reset clock
+            lastAdded: getCurrentAppTime(), // Reset clock
             autoAdded: true, // Tag it visually
             frequencyCount: item.frequencyCount + 1
           });
@@ -539,7 +541,7 @@ User Voice Command: "${text}" (The command is transcribed using speech recogniti
       await updateDoc(docRef, {
         checked: isChecking,
         frequencyCount: isChecking ? item.frequencyCount + 1 : item.frequencyCount,
-        lastAdded: isChecking ? Date.now() + (timeShiftDays * 24 * 60 * 60 * 1000) : item.lastAdded,
+        lastAdded: isChecking ? getCurrentAppTime() : item.lastAdded,
         autoAdded: isChecking ? false : item.autoAdded
       });
     } catch (err) {
@@ -647,9 +649,9 @@ User Voice Command: "${text}" (The command is transcribed using speech recogniti
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
       <SandboxHeader 
-        timeShiftDays={timeShiftDays} 
+        uiTimeShift={uiTimeShift}
         handleTimeTravel={handleTimeTravel} 
-        setTimeShiftDays={setTimeShiftDays} 
+        setUiTimeShift={setUiTimeShift}
         user={user}
       />
 
