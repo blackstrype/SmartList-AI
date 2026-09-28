@@ -25,12 +25,12 @@ import {
 
 // Pre-configured typical items for the simulation
 const INITIAL_ITEMS = [
-  { id: '1', name: 'Organic Milk 2%', checked: false, category: 'Dairy & Eggs', aisle: 'Aisle 1', frequencyCount: 14, intervalDays: 7, lastAdded: Date.now() - (6 * 24 * 60 * 60 * 1000), autoAdded: false },
-  { id: '2', name: 'Whole Wheat Bread', checked: false, category: 'Bakery', aisle: 'Aisle 2', frequencyCount: 12, intervalDays: 5, lastAdded: Date.now() - (4 * 24 * 60 * 60 * 1000), autoAdded: false },
-  { id: '3', name: 'Fresh Bananas', checked: false, category: 'Produce', aisle: 'Aisle A (Entrance)', frequencyCount: 18, intervalDays: 4, lastAdded: Date.now() - (3 * 24 * 60 * 60 * 1000), autoAdded: false },
-  { id: '4', name: 'Greek Yogurt (Vanilla)', checked: true, category: 'Dairy & Eggs', aisle: 'Aisle 1', frequencyCount: 8, intervalDays: 10, lastAdded: Date.now() - (2 * 24 * 60 * 60 * 1000), autoAdded: false },
-  { id: '5', name: 'Avocados', checked: false, category: 'Produce', aisle: 'Aisle A (Entrance)', frequencyCount: 9, intervalDays: 0, lastAdded: Date.now(), autoAdded: false },
-  { id: '6', name: 'Paper Towels', checked: true, category: 'Household', aisle: 'Aisle 12', frequencyCount: 5, intervalDays: 30, lastAdded: Date.now() - (15 * 24 * 60 * 60 * 1000), autoAdded: false }
+  { id: '1', name: 'Organic Milk 2%', checked: false, category: 'Dairy & Eggs', aisle: 'Aisle 1', frequencyCount: 14, intervalDays: 7, lastAdded: getCurrentAppTime() - (6 * 24 * 60 * 60 * 1000), autoAdded: false },
+  { id: '2', name: 'Whole Wheat Bread', checked: false, category: 'Bakery', aisle: 'Aisle 2', frequencyCount: 12, intervalDays: 5, lastAdded: getCurrentAppTime() - (4 * 24 * 60 * 60 * 1000), autoAdded: false },
+  { id: '3', name: 'Fresh Bananas', checked: false, category: 'Produce', aisle: 'Aisle A (Entrance)', frequencyCount: 18, intervalDays: 4, lastAdded: getCurrentAppTime() - (3 * 24 * 60 * 60 * 1000), autoAdded: false },
+  { id: '4', name: 'Greek Yogurt (Vanilla)', checked: true, category: 'Dairy & Eggs', aisle: 'Aisle 1', frequencyCount: 8, intervalDays: 10, lastAdded: getCurrentAppTime() - (2 * 24 * 60 * 60 * 1000), autoAdded: false },
+  { id: '5', name: 'Avocados', checked: false, category: 'Produce', aisle: 'Aisle A (Entrance)', frequencyCount: 9, intervalDays: 0, lastAdded: getCurrentAppTime(), autoAdded: false },
+  { id: '6', name: 'Paper Towels', checked: true, category: 'Household', aisle: 'Aisle 12', frequencyCount: 5, intervalDays: 30, lastAdded: getCurrentAppTime() - (15 * 24 * 60 * 60 * 1000), autoAdded: false }
 ];
 
 const ITEM_SUGGESTIONS = [
@@ -82,7 +82,7 @@ export default function App() {
   const [isVoiceActive, setIsVoiceActive] = useState(false);
   const [voiceResultText, setVoiceResultText] = useState('');
   const [voiceStatus, setVoiceStatus] = useState('Click mic to speak to Gemini...');
-  const [timeShiftDays, setTimeShiftDays] = useState(0); // Simulated time engine days elapsed
+  const [uiTimeShift, setUiTimeShift] = useState(0); // Simulated time engine days elapsed (UI only)
   const [notifications, setNotifications] = useState([]);
   const [isSortingAI, setIsSortingAI] = useState(false);
   const [geminiStatus, setGeminiStatus] = useState('');
@@ -227,7 +227,7 @@ export default function App() {
             return {
               ...item,
               checked: false, // Automatically put back in action
-              lastAdded: Date.now() + (newShift * 24 * 60 * 60 * 1000), // Reset clock
+              lastAdded: getCurrentAppTime() + (newShift * 24 * 60 * 60 * 1000), // Reset clock
               autoAdded: true, // Tag it visually
               frequencyCount: item.frequencyCount + 1
             };
@@ -244,7 +244,7 @@ export default function App() {
   };
 
   const addNotification = (msg) => {
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+    const id = `${getCurrentAppTime()}-${Math.random().toString(36).slice(2, 11)}`;
     setNotifications(prev => [...prev, { id, msg, exiting: false }]);
     setTimeout(() => {
       dismissNotification(id);
@@ -307,14 +307,14 @@ export default function App() {
     }
 
     const newItem = {
-      id: Date.now().toString(),
+      id: getCurrentAppTime().toString(),
       name,
       checked: false,
       category,
       aisle,
       frequencyCount: isVoice ? 2 : 1,
       intervalDays: days,
-      lastAdded: Date.now() + (timeShiftDays * 24 * 60 * 60 * 1000),
+      lastAdded: getCurrentAppTime() + (timeShiftDays * 24 * 60 * 60 * 1000),
       autoAdded: isVoice
     };
 
@@ -338,7 +338,7 @@ export default function App() {
           ...item,
           checked: isChecking,
           frequencyCount: isChecking ? item.frequencyCount + 1 : item.frequencyCount,
-          lastAdded: isChecking ? Date.now() + (timeShiftDays * 24 * 60 * 60 * 1000) : item.lastAdded,
+          lastAdded: isChecking ? getCurrentAppTime() : item.lastAdded,
           autoAdded: isChecking ? false : item.autoAdded
         };
       }
